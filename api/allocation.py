@@ -25,17 +25,19 @@ def split_equal(item_total: float, participants: list[ParticipantShare]) -> list
 
 
 def split_percentage(item_total: float, participants: list[ParticipantShare]) -> list[AllocationResult]:
-    total_pct = sum(p.value for p in participants)
+    values = [p.value if p.value is not None else 0.0 for p in participants]
+    total_pct = sum(values)
     if abs(total_pct - 100.0) > 0.01:
         raise ValueError(f"percentages must sum to 100, got {total_pct:.4f}")
-    return [AllocationResult(user_id=p.user_id, amount=item_total * p.value / 100) for p in participants]
+    return [AllocationResult(user_id=p.user_id, amount=item_total * v / 100) for p, v in zip(participants, values)]
 
 
 def split_fraction(item_total: float, participants: list[ParticipantShare]) -> list[AllocationResult]:
-    total_parts = sum(p.value for p in participants)
+    values = [p.value if p.value is not None else 0.0 for p in participants]
+    total_parts = sum(values)
     if total_parts <= 0:
         raise ValueError("fraction values must sum to a positive number")
-    return [AllocationResult(user_id=p.user_id, amount=item_total * p.value / total_parts) for p in participants]
+    return [AllocationResult(user_id=p.user_id, amount=item_total * v / total_parts) for p, v in zip(participants, values)]
 
 
 def resolve_allocations(
