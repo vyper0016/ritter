@@ -1,3 +1,5 @@
 creds.json
 samples/
 __pycache__/
+pyrightconfig.json
+plan.md
