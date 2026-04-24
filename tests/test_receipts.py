@@ -140,6 +140,25 @@ async def test_delete_item(client, user_token, db, receipt_with_item):
     assert await db.get(LineItemORM, item.id) is None
 
 
+async def test_delete_receipt_owner(client, user_token, db, receipt):
+    resp = await client.delete(
+        f"/receipts/{receipt.id}",
+        headers={"Authorization": f"Bearer {user_token}"},
+    )
+    assert resp.status_code == 204
+
+    from api.models import ReceiptORM
+    assert await db.get(ReceiptORM, receipt.id) is None
+
+
+async def test_delete_receipt_non_owner_forbidden(client, admin_token, receipt):
+    resp = await client.delete(
+        f"/receipts/{receipt.id}",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert resp.status_code == 403
+
+
 async def test_list_filter_settled_false(client, user_token, db, user):
     from api.models import ReceiptORM as R
     r1 = R(created_by_id=user.id, payer_id=user.id, participant_ids=[user.id], settled=False)
@@ -219,3 +238,66 @@ async def test_non_owner_cannot_edit_item(client, admin_token, receipt_with_item
         headers={"Authorization": f"Bearer {admin_token}"},
     )
     assert resp.status_code == 403
+
+
+async def test_update_receipt_meta_owner(client, user_token, receipt):
+    resp = await client.put(
+        f"/receipts/{receipt.id}/meta",
+        json={"vendor_name": "My Manual Vendor", "date": "2026-04-01"},
+        headers={"Authorization": f"Bearer {user_token}"},
+    )
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["vendor_name"] == "My Manual Vendor"
+    assert data["date"] == "2026-04-01"
+
+
+async def test_update_receipt_meta_non_owner_forbidden(client, admin_token, receipt):
+    resp = await client.put(
+        f"/receipts/{receipt.id}/meta",
+        json={"vendor_name": "Nope", "date": "2026-04-02"},
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert resp.status_code == 403
+
+
+async def test_list_receipts_includes_vendor_logo_url_direct(client, user_token, db, user):
+    from api.models import ReceiptORM as R
+
+    r = R(
+        created_by_id=user.id,
+        payer_id=user.id,
+        participant_ids=[user.id],
+        raw_ocr_data={"vendor_logo_url": "https://cdn.example/logo.png"},
+    )
+    db.add(r)
+    await db.commit()
+
+    resp = await client.get(
+        "/receipts",
+        headers={"Authorization": f"Bearer {user_token}"},
+    )
+    assert resp.status_code == 200
+    row = next(x for x in resp.json() if x["id"] == r.id)
+    assert row["vendor_logo_url"] == "https://cdn.example/logo.png"
+
+
+async def test_list_receipts_includes_vendor_logo_url_nested_vendor(client, user_token, db, user):
+    from api.models import ReceiptORM as R
+
+    r = R(
+        created_by_id=user.id,
+        payer_id=user.id,
+        participant_ids=[user.id],
+        raw_ocr_data={"vendor": {"logo": "https://cdn.example/vendor-logo.png"}},
+    )
+    db.add(r)
+    await db.commit()
+
+    resp = await client.get(
+        "/receipts",
+        headers={"Authorization": f"Bearer {user_token}"},
+    )
+    assert resp.status_code == 200
+    row = next(x for x in resp.json() if x["id"] == r.id)
+    assert row["vendor_logo_url"] == "https://cdn.example/vendor-logo.png"

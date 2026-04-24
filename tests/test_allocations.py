@@ -21,6 +21,28 @@ async def test_set_equal_split(client, user_token, db, receipt_with_item):
     assert allocs[0]["amount"] == item.total
 
 
+async def test_get_item_allocations(client, user_token, receipt_with_item):
+    receipt, item = receipt_with_item
+
+    await client.put(
+        f"/receipts/{receipt.id}/items/{item.id}/allocations",
+        json={
+            "split_type": "equal",
+            "participants": [{"user_id": receipt.payer_id}],
+        },
+        headers={"Authorization": f"Bearer {user_token}"},
+    )
+
+    resp = await client.get(
+        f"/receipts/{receipt.id}/items/{item.id}/allocations",
+        headers={"Authorization": f"Bearer {user_token}"},
+    )
+    assert resp.status_code == 200
+    data = resp.json()
+    assert len(data) == 1
+    assert data[0]["line_item_id"] == item.id
+
+
 async def test_set_fraction_split(client, user_token, db, receipt_with_item, admin):
     receipt, item = receipt_with_item
     resp = await client.put(

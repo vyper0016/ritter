@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { createReceipt } from '../api/receipts'
-import { getUsers, getDefaults } from '../api/users'
+import { getUsers } from '../api/users'
 import { useAuth } from '../contexts/AuthContext'
 
 export default function NewReceiptPage() {
@@ -13,17 +13,19 @@ export default function NewReceiptPage() {
   const [image, setImage] = useState<File | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [participantsInitialized, setParticipantsInitialized] = useState(false)
 
   const { data: users } = useQuery({ queryKey: ['users'], queryFn: getUsers })
-  const { data: defaults } = useQuery({ queryKey: ['defaults'], queryFn: getDefaults })
 
   useEffect(() => {
     if (user && payerId === 0) setPayerId(user.id)
   }, [user, payerId])
 
   useEffect(() => {
-    if (defaults && participants.length === 0) setParticipants(defaults)
-  }, [defaults, participants.length])
+    if (!users || participantsInitialized) return
+    setParticipants(users.map((u) => u.id))
+    setParticipantsInitialized(true)
+  }, [users, participantsInitialized])
 
   function toggleParticipant(id: number) {
     setParticipants((prev) =>
@@ -64,32 +66,42 @@ export default function NewReceiptPage() {
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Payer</label>
-          <select
-            value={payerId}
-            onChange={(e) => setPayerId(Number(e.target.value))}
-            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
-          >
-            {users?.map((u) => (
-              <option key={u.id} value={u.id}>{u.name}</option>
-            ))}
-          </select>
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">Participants</label>
-          <div className="space-y-2">
-            {users?.map((u) => (
-              <label key={u.id} className="flex items-center gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  checked={participants.includes(u.id)}
-                  onChange={() => toggleParticipant(u.id)}
-                  className="rounded"
-                />
-                {u.name}
-              </label>
-            ))}
+          <label className="block text-sm font-medium text-gray-700 mb-2">Users</label>
+          <div className="overflow-hidden rounded-lg border border-gray-200 bg-white">
+            <table className="w-full text-sm">
+              <thead className="bg-gray-50 text-gray-600">
+                <tr>
+                  <th className="px-3 py-2 text-left font-medium">User</th>
+                  <th className="px-3 py-2 text-center font-medium">Payer</th>
+                  <th className="px-3 py-2 text-center font-medium">Participant</th>
+                </tr>
+              </thead>
+              <tbody>
+                {users?.map((u) => (
+                  <tr key={u.id} className="border-t border-gray-100">
+                    <td className="px-3 py-2 text-gray-700">
+                      <div className="font-medium">{u.name}</div>
+                      <div className="text-xs text-gray-400">@{u.username}</div>
+                    </td>
+                    <td className="px-3 py-2 text-center">
+                      <input
+                        type="radio"
+                        name="payer"
+                        checked={payerId === u.id}
+                        onChange={() => setPayerId(u.id)}
+                      />
+                    </td>
+                    <td className="px-3 py-2 text-center">
+                      <input
+                        type="checkbox"
+                        checked={participants.includes(u.id)}
+                        onChange={() => toggleParticipant(u.id)}
+                      />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         </div>
 

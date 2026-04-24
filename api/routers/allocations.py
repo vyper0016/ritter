@@ -34,6 +34,25 @@ class _SummaryEntry(BaseModel):
     total_owed: float
 
 
+@router.get("/{receipt_id}/items/{item_id}/allocations", response_model=list[_AllocationOut])
+async def get_item_allocations(
+    receipt_id: int,
+    item_id: int,
+    db: AsyncSession = Depends(get_db),
+    _=Depends(get_current_user),
+):
+    item = await db.get(LineItemORM, item_id)
+    if item is None or item.receipt_id != receipt_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Line item not found")
+
+    result = await db.execute(
+        select(ItemAllocationORM)
+        .where(ItemAllocationORM.line_item_id == item_id)
+        .order_by(ItemAllocationORM.id)
+    )
+    return result.scalars().all()
+
+
 @router.put("/{receipt_id}/items/{item_id}/allocations", response_model=list[_AllocationOut])
 async def set_item_allocations(
     receipt_id: int,

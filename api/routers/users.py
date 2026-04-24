@@ -23,26 +23,14 @@ class _SetAdminBody(BaseModel):
     is_admin: bool
 
 
+class _SetNameBody(BaseModel):
+    name: str
+
+
 @router.get("", response_model=list[User])
 async def list_users(db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(UserORM))
     return result.scalars().all()
-
-
-@router.get("/me/defaults", response_model=list[int])
-async def get_defaults(current_user: UserORM = Depends(get_current_user)):
-    return current_user.default_participant_ids
-
-
-@router.put("/me/defaults", response_model=list[int])
-async def set_defaults(
-    participant_ids: list[int],
-    db: AsyncSession = Depends(get_db),
-    current_user: UserORM = Depends(get_current_user),
-):
-    current_user.default_participant_ids = participant_ids
-    await db.commit()
-    return participant_ids
 
 
 @router.put("/me/picture", response_model=User)
@@ -94,6 +82,28 @@ async def get_user(user_id: int, db: AsyncSession = Depends(get_db)):
     user = await db.get(UserORM, user_id)
     if user is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    return user
+
+
+@router.patch("/{user_id}/name", response_model=User)
+async def set_user_name(
+    user_id: int,
+    body: _SetNameBody,
+    db: AsyncSession = Depends(get_db),
+    current_user: UserORM = Depends(get_current_user),
+):
+    if current_user.id != user_id and not current_user.is_admin:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
+    user = await db.get(UserORM, user_id)
+    if user is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    name = body.name.strip()
+    if not name:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Name cannot be empty")
+    user.name = name
+    await db.commit()
+    await db.refresh(user)
+    log.info("User #%d name updated to %r by user #%d", user.id, name, current_user.id)
     return user
 
 

@@ -3,12 +3,13 @@ import type { User } from '../types'
 
 export const getUsers = () => apiFetch<User[]>('/users')
 
+export const updateUserName = (userId: number, name: string) =>
+  apiFetch<User>(`/users/${userId}/name`, {
+    method: 'PATCH',
+    body: JSON.stringify({ name }),
+  })
+
 export const getUser = (id: number) => apiFetch<User>(`/users/${id}`)
-
-export const getDefaults = () => apiFetch<number[]>('/users/me/defaults')
-
-export const setDefaults = (ids: number[]) =>
-  apiFetch<number[]>('/users/me/defaults', { method: 'PUT', body: JSON.stringify(ids) })
 
 export const uploadPicture = (file: File) => {
   const form = new FormData()

@@ -17,8 +17,7 @@ export default function Layout({ children }: { children: ReactNode }) {
         <div className="max-w-2xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-6">
             <Link to="/" className="font-semibold text-gray-800">Ritter</Link>
-            <Link to="/settle" className="text-sm text-gray-500 hover:text-gray-800">Settle</Link>
-            {user?.is_admin && (
+{user?.is_admin && (
               <Link to="/admin" className="text-sm text-gray-500 hover:text-gray-800">Admin</Link>
             )}
           </div>

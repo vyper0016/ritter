@@ -22,6 +22,18 @@ export const listReceipts = (params: ListReceiptsParams = {}) => {
 
 export const getReceipt = (id: number) => apiFetch<Receipt>(`/receipts/${id}`)
 
+export const deleteReceipt = (id: number) =>
+  apiFetch<void>(`/receipts/${id}`, { method: 'DELETE' })
+
+export const updateReceiptMeta = (
+  id: number,
+  data: { vendor_name: string | null; date: string | null },
+) =>
+  apiFetch<Receipt>(`/receipts/${id}/meta`, {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  })
+
 export const createReceipt = ({ payer_id, participant_ids, image }: CreateReceiptParams) => {
   const form = new FormData()
   form.append('payer_id', String(payer_id))

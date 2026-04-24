@@ -1,29 +1,24 @@
 import { useRef, useState, useEffect } from 'react'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { getUsers, getDefaults, setDefaults, uploadPicture, deletePicture } from '../api/users'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { uploadPicture, deletePicture, updateUserName } from '../api/users'
 import { useAuth } from '../contexts/AuthContext'
 import UserAvatar from '../components/UserAvatar'
 
 export default function ProfilePage() {
-  const { user } = useAuth()
+  const { user, setUser } = useAuth()
   const qc = useQueryClient()
   const fileRef = useRef<HTMLInputElement>(null)
-  const [saveMsg, setSaveMsg] = useState('')
-
-  const { data: users } = useQuery({ queryKey: ['users'], queryFn: getUsers })
-  const { data: defaults } = useQuery({ queryKey: ['defaults'], queryFn: getDefaults })
-  const [selected, setSelected] = useState<number[]>([])
+  const [nameInput, setNameInput] = useState('')
 
   useEffect(() => {
-    if (defaults && defaults.length > 0) setSelected(defaults)
-  }, [defaults])
+    if (user) setNameInput(user.name)
+  }, [user?.id])
 
-  const defaultsMutation = useMutation({
-    mutationFn: (ids: number[]) => setDefaults(ids),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['defaults'] })
-      setSaveMsg('Saved')
-      setTimeout(() => setSaveMsg(''), 2000)
+  const nameMutation = useMutation({
+    mutationFn: (name: string) => updateUserName(user!.id, name),
+    onSuccess: (updated) => {
+      setUser(updated)
+      qc.invalidateQueries({ queryKey: ['users'] })
     },
   })
 
@@ -37,17 +32,34 @@ export default function ProfilePage() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['users'] }),
   })
 
-  function toggleParticipant(id: number) {
-    setSelected((prev) => prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id])
-  }
-
   if (!user) return null
 
   return (
     <div className="max-w-lg mx-auto py-8 px-4">
       <h1 className="text-2xl font-semibold text-gray-800 mb-6">Profile</h1>
 
-      <div className="bg-white rounded-xl border border-gray-200 p-5 mb-6">
+      <div className="bg-white rounded-xl border border-gray-200 p-5 mb-4">
+        <h2 className="text-sm font-medium text-gray-700 mb-4">Display Name</h2>
+        <div className="flex gap-2">
+          <input
+            value={nameInput}
+            onChange={(e) => setNameInput(e.target.value)}
+            className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm"
+          />
+          <button
+            onClick={() => nameMutation.mutate(nameInput)}
+            disabled={nameMutation.isPending || !nameInput.trim() || nameInput === user.name}
+            className="bg-blue-600 text-white rounded-lg px-4 py-2 text-sm hover:bg-blue-700 disabled:opacity-50"
+          >
+            {nameMutation.isPending ? 'Saving…' : 'Save'}
+          </button>
+        </div>
+        {nameMutation.isError && (
+          <p className="text-red-500 text-xs mt-1">Failed to update name</p>
+        )}
+      </div>
+
+      <div className="bg-white rounded-xl border border-gray-200 p-5">
         <h2 className="text-sm font-medium text-gray-700 mb-4">Profile Picture</h2>
         <div className="flex items-center gap-4">
           <UserAvatar user={user} size={16} />
@@ -77,32 +89,6 @@ export default function ProfilePage() {
               if (f) pictureMutation.mutate(f)
             }}
           />
-        </div>
-      </div>
-
-      <div className="bg-white rounded-xl border border-gray-200 p-5">
-        <h2 className="text-sm font-medium text-gray-700 mb-4">Default Participants</h2>
-        <div className="space-y-2 mb-4">
-          {users?.map((u) => (
-            <label key={u.id} className="flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                checked={selected.includes(u.id)}
-                onChange={() => toggleParticipant(u.id)}
-              />
-              {u.name}
-            </label>
-          ))}
-        </div>
-        <div className="flex items-center gap-3">
-          <button
-            onClick={() => defaultsMutation.mutate(selected)}
-            disabled={defaultsMutation.isPending}
-            className="bg-blue-600 text-white rounded-lg px-4 py-2 text-sm hover:bg-blue-700 disabled:opacity-50"
-          >
-            Save defaults
-          </button>
-          {saveMsg && <span className="text-green-600 text-sm">{saveMsg}</span>}
         </div>
       </div>
     </div>

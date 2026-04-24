@@ -1,10 +1,14 @@
 import { apiFetch } from './client'
 import type { Allocation, SplitType } from '../types'
 
-export interface AllocationInput {
+export interface ParticipantInput {
   user_id: number
+  value?: number | null
+}
+
+export interface SetAllocationsInput {
   split_type: SplitType
-  split_value?: number | null
+  participants: ParticipantInput[]
 }
 
 export const getAllocations = (receiptId: number, itemId: number) =>
@@ -13,9 +17,9 @@ export const getAllocations = (receiptId: number, itemId: number) =>
 export const setAllocations = (
   receiptId: number,
   itemId: number,
-  allocations: AllocationInput[],
+  body: SetAllocationsInput,
 ) =>
   apiFetch<Allocation[]>(`/receipts/${receiptId}/items/${itemId}/allocations`, {
     method: 'PUT',
-    body: JSON.stringify(allocations),
+    body: JSON.stringify(body),
   })

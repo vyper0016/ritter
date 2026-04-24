@@ -1,1 +1,87 @@
 @import "tailwindcss";
+
+:root {
+	color-scheme: light;
+	--page-bg: #f9fafb;
+	--surface-bg: #ffffff;
+	--surface-soft: #f3f4f6;
+	--border-default: #e5e7eb;
+	--border-strong: #d1d5db;
+	--text-strong: #1f2937;
+	--text-main: #374151;
+	--text-muted: #6b7280;
+	--text-faint: #9ca3af;
+	--accent: #2563eb;
+	--accent-hover: #1d4ed8;
+}
+
+@media (prefers-color-scheme: dark) {
+	:root {
+		color-scheme: dark;
+		--page-bg: #0b1220;
+		--surface-bg: #111827;
+		--surface-soft: #1f2937;
+		--border-default: #374151;
+		--border-strong: #4b5563;
+		--text-strong: #f3f4f6;
+		--text-main: #e5e7eb;
+		--text-muted: #9ca3af;
+		--text-faint: #6b7280;
+		--accent: #3b82f6;
+		--accent-hover: #60a5fa;
+	}
+}
+
+html,
+body,
+#root {
+	min-height: 100%;
+}
+
+body {
+	background-color: var(--page-bg);
+	color: var(--text-main);
+}
+
+.bg-white {
+	background-color: var(--surface-bg) !important;
+}
+
+.bg-gray-50,
+.bg-gray-100 {
+	background-color: var(--surface-soft) !important;
+}
+
+.border-gray-200 {
+	border-color: var(--border-default) !important;
+}
+
+.border-gray-300 {
+	border-color: var(--border-strong) !important;
+}
+
+.text-gray-800,
+.text-gray-700 {
+	color: var(--text-strong) !important;
+}
+
+.text-gray-600,
+.text-gray-500 {
+	color: var(--text-muted) !important;
+}
+
+.text-gray-400 {
+	color: var(--text-faint) !important;
+}
+
+.bg-blue-600 {
+	background-color: var(--accent) !important;
+}
+
+.hover\:bg-blue-700:hover {
+	background-color: var(--accent-hover) !important;
+}
+
+.hover\:bg-gray-50:hover {
+	background-color: var(--surface-soft) !important;
+}

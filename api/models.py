@@ -32,9 +32,6 @@ class UserORM(Base):
     hashed_password: Mapped[str] = mapped_column(String(255), nullable=False)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     is_admin: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
-    default_participant_ids: Mapped[list[int]] = mapped_column(
-        ARRAY(Integer), nullable=False, default=list
-    )
     profile_picture_path: Mapped[str | None] = mapped_column(Text)
     profile_picture_filename: Mapped[str | None] = mapped_column(String(255))
     profile_picture_mimetype: Mapped[str | None] = mapped_column(String(100))
@@ -85,6 +82,23 @@ class ReceiptORM(Base):
     line_items: Mapped[list[LineItemORM]] = relationship(
         back_populates="receipt", cascade="all, delete-orphan"
     )
+
+    @property
+    def vendor_logo_url(self) -> str | None:
+        if not self.raw_ocr_data:
+            return None
+
+        direct = self.raw_ocr_data.get("vendor_logo_url")
+        if isinstance(direct, str) and direct:
+            return direct
+
+        vendor = self.raw_ocr_data.get("vendor")
+        if isinstance(vendor, dict):
+            logo = vendor.get("logo")
+            if isinstance(logo, str) and logo:
+                return logo
+
+        return None
 
 
 class LineItemORM(Base):

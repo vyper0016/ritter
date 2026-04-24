@@ -15,6 +15,8 @@ from api.misc import get_config
 from api.models import ItemAllocationORM, LineItemORM, OcrStatus, ReceiptORM
 from api.ocr import get_ocr_provider
 
+DateType = date
+
 RECEIPT_IMAGE_PATH = get_config("RECEIPT_IMAGE_PATH", "./images")
 
 log = get_logger(__name__)
@@ -36,6 +38,11 @@ class _LineItemOut(BaseModel):
 class _ParticipantsBody(BaseModel):
     payer_id: int
     participant_ids: list[int]
+
+
+class _ReceiptMetaBody(BaseModel):
+    vendor_name: str | None = None
+    date: DateType | None = None
 
 
 class _LineItemIn(BaseModel):
@@ -62,9 +69,10 @@ class _ReceiptOut(BaseModel):
     payer_id: int
     participant_ids: list[int]
     ocr_status: str
-    date: date | None
+    date: DateType | None
     total: float | None
     vendor_name: str | None
+    vendor_logo_url: str | None = None
     settled: bool
     settled_at: datetime | None
     created_at: datetime
@@ -103,7 +111,12 @@ async def _run_ocr(receipt_id: int) -> None:
             receipt.total = result.total
             receipt.vendor_name = result.vendor.name if result.vendor else None
             receipt.date = result.date.date() if isinstance(result.date, datetime) else result.date
-            receipt.raw_ocr_data = result.raw_response
+            raw_ocr_data = dict(result.raw_response or {})
+            if result.vendor and result.vendor.raw_response:
+                raw_ocr_data["vendor"] = result.vendor.raw_response
+            if result.vendor and result.vendor.logo:
+                raw_ocr_data["vendor_logo_url"] = str(result.vendor.logo)
+            receipt.raw_ocr_data = raw_ocr_data
             receipt.ocr_status = OcrStatus.done
             log.info("Receipt #%d OCR done — vendor=%r total=%.2f items=%d",
                      receipt_id, receipt.vendor_name, receipt.total or 0, len(result.line_items))
@@ -220,6 +233,20 @@ async def get_receipt_image(
     return FileResponse(receipt.image_path, media_type=receipt.image_mimetype)
 
 
+@router.delete("/{receipt_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_receipt(
+    receipt_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    receipt = await require_receipt_owner(receipt_id, db, current_user)
+    if receipt.image_path and os.path.exists(receipt.image_path):
+        os.remove(receipt.image_path)
+    await db.delete(receipt)
+    await db.commit()
+    log.info("Receipt #%d deleted by user #%d", receipt_id, current_user.id)
+
+
 @router.put("/{receipt_id}/participants", response_model=_ReceiptOut)
 async def update_participants(
     receipt_id: int,
@@ -233,6 +260,22 @@ async def update_participants(
     await db.commit()
     await db.refresh(receipt)
     log.info("Receipt #%d participants updated by user #%d", receipt_id, current_user.id)
+    return receipt
+
+
+@router.put("/{receipt_id}/meta", response_model=_ReceiptOut)
+async def update_receipt_meta(
+    receipt_id: int,
+    body: _ReceiptMetaBody,
+    db: AsyncSession = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    receipt = await require_receipt_owner(receipt_id, db, current_user)
+    receipt.vendor_name = body.vendor_name.strip() if body.vendor_name else None
+    receipt.date = body.date
+    await db.commit()
+    await db.refresh(receipt)
+    log.info("Receipt #%d metadata updated by user #%d", receipt_id, current_user.id)
     return receipt
 
 

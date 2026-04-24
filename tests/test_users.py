@@ -5,33 +5,6 @@ import pytest
 pytestmark = pytest.mark.asyncio(loop_scope="session")
 
 
-async def test_get_defaults_empty(client, user_token):
-    resp = await client.get(
-        "/users/me/defaults",
-        headers={"Authorization": f"Bearer {user_token}"},
-    )
-    assert resp.status_code == 200
-    assert resp.json() == []
-
-
-async def test_set_defaults(client, user_token, db, user):
-    resp = await client.put(
-        "/users/me/defaults",
-        json=[user.id, 2, 3],
-        headers={"Authorization": f"Bearer {user_token}"},
-    )
-    assert resp.status_code == 200
-    assert resp.json() == [user.id, 2, 3]
-
-    await db.refresh(user)
-    assert user.default_participant_ids == [user.id, 2, 3]
-
-
-async def test_set_defaults_requires_auth(client):
-    resp = await client.put("/users/me/defaults", json=[1, 2])
-    assert resp.status_code == 401
-
-
 async def test_upload_profile_picture(client, user_token, db, user):
     png = b"\x89PNG\r\n\x1a\n" + b"\x00" * 64
     resp = await client.put(

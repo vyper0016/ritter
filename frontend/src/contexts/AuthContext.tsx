@@ -8,6 +8,7 @@ interface AuthCtx {
   user: User | null
   token: string | null
   setToken: (t: string | null) => void
+  setUser: (u: User) => void
   loading: boolean
 }
 
@@ -15,6 +16,7 @@ const AuthContext = createContext<AuthCtx>({
   user: null,
   token: null,
   setToken: () => {},
+  setUser: () => {},
   loading: true,
 })
 
@@ -44,7 +46,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [token])
 
   return (
-    <AuthContext.Provider value={{ user, token, setToken, loading }}>
+    <AuthContext.Provider value={{ user, token, setToken, setUser, loading }}>
       {children}
     </AuthContext.Provider>
   )
