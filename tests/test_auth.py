@@ -1,5 +1,7 @@
 import pytest
 
+pytestmark = pytest.mark.asyncio(loop_scope="session")
+
 
 async def test_login_success(client, admin):
     resp = await client.post("/auth/login", data={"username": "admin", "password": "adminpass"})

@@ -18,7 +18,7 @@ from api.models import UserORM, ReceiptORM, LineItemORM
 
 _TEST_DB_URL = get_config(
     "TEST_DATABASE_URL",
-    "postgresql+asyncpg://postgres:postgres@localhost/ritter_test",
+    "postgresql+asyncpg://postgres:postgres@localhost:15432/ritter_test",
 )
 
 _VIEWS_DIR = Path(__file__).parent.parent / "sql" / "views"
@@ -28,22 +28,29 @@ _VIEW_FILES = [
     "user_outstanding_totals.sql",
 ]
 
+_DROP_VIEWS_SQL = "DROP VIEW IF EXISTS user_outstanding_totals, unsettled_summary, receipt_balances CASCADE"
 
-@pytest_asyncio.fixture(scope="session")
+
+def _drop_all(sync_conn):
+    sync_conn.execute(text(_DROP_VIEWS_SQL))
+    Base.metadata.drop_all(sync_conn)
+
+
+@pytest_asyncio.fixture(scope="session", loop_scope="session")
 async def engine():
     e = create_async_engine(_TEST_DB_URL)
     async with e.begin() as conn:
-        await conn.run_sync(Base.metadata.drop_all)
+        await conn.run_sync(_drop_all)
         await conn.run_sync(Base.metadata.create_all)
         for fname in _VIEW_FILES:
             await conn.execute(text((_VIEWS_DIR / fname).read_text()))
     yield e
     async with e.begin() as conn:
-        await conn.run_sync(Base.metadata.drop_all)
+        await conn.run_sync(_drop_all)
     await e.dispose()
 
 
-@pytest_asyncio.fixture
+@pytest_asyncio.fixture(loop_scope="session")
 async def db(engine):
     async with engine.begin() as conn:
         for table in reversed(Base.metadata.sorted_tables):
@@ -53,7 +60,7 @@ async def db(engine):
         yield session
 
 
-@pytest_asyncio.fixture
+@pytest_asyncio.fixture(loop_scope="session")
 async def client(db):
     async def _override_db():
         yield db
@@ -68,7 +75,7 @@ async def client(db):
     app.dependency_overrides.clear()
 
 
-@pytest_asyncio.fixture
+@pytest_asyncio.fixture(loop_scope="session")
 async def admin(db):
     user = UserORM(
         username="admin",
@@ -81,7 +88,7 @@ async def admin(db):
     return user
 
 
-@pytest_asyncio.fixture
+@pytest_asyncio.fixture(loop_scope="session")
 async def user(db):
     u = UserORM(
         username="alice",
@@ -94,19 +101,19 @@ async def user(db):
     return u
 
 
-@pytest_asyncio.fixture
+@pytest_asyncio.fixture(loop_scope="session")
 async def admin_token(client, admin):
     resp = await client.post("/auth/login", data={"username": "admin", "password": "adminpass"})
     return resp.json()["access_token"]
 
 
-@pytest_asyncio.fixture
+@pytest_asyncio.fixture(loop_scope="session")
 async def user_token(client, user):
     resp = await client.post("/auth/login", data={"username": "alice", "password": "alicepass"})
     return resp.json()["access_token"]
 
 
-@pytest_asyncio.fixture
+@pytest_asyncio.fixture(loop_scope="session")
 async def receipt(db, user):
     r = ReceiptORM(
         created_by_id=user.id,
@@ -118,7 +125,7 @@ async def receipt(db, user):
     return r
 
 
-@pytest_asyncio.fixture
+@pytest_asyncio.fixture(loop_scope="session")
 async def receipt_with_item(db, receipt):
     item = LineItemORM(
         receipt_id=receipt.id,

@@ -1,6 +1,8 @@
 import pytest
 from sqlalchemy import select
 
+pytestmark = pytest.mark.asyncio(loop_scope="session")
+
 
 async def test_create_manual_receipt(client, user_token, user):
     resp = await client.post(

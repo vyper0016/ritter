@@ -5,6 +5,7 @@ from sqlalchemy import (
     Boolean, Date, Double, Enum, ForeignKey,
     Integer, String, Text, func,
 )
+from sqlalchemy.dialects.postgresql import TIMESTAMP as PG_TIMESTAMP
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from api.db import Base
@@ -67,7 +68,7 @@ class ReceiptORM(Base):
     vendor_name: Mapped[str | None] = mapped_column(String(255))
     raw_ocr_data: Mapped[dict | None] = mapped_column(JSONB)
     settled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
-    settled_at: Mapped[datetime | None] = mapped_column()
+    settled_at: Mapped[datetime | None] = mapped_column(PG_TIMESTAMP(timezone=True))
     created_at: Mapped[datetime] = mapped_column(
         nullable=False, server_default=func.now()
     )

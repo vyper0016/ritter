@@ -1,5 +1,8 @@
+import pytest
 from sqlalchemy import select
 from api.models import ReceiptORM
+
+pytestmark = pytest.mark.asyncio(loop_scope="session")
 
 
 async def test_settle_specific_receipts(client, user_token, db, receipt):

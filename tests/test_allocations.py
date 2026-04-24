@@ -2,6 +2,8 @@ import pytest
 from sqlalchemy import select
 from api.models import ItemAllocationORM
 
+pytestmark = pytest.mark.asyncio(loop_scope="session")
+
 
 async def test_set_equal_split(client, user_token, db, receipt_with_item):
     receipt, item = receipt_with_item
