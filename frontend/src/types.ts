@@ -1,0 +1,69 @@
+export type OcrStatus = 'pending' | 'processing' | 'done' | 'failed'
+export type SplitType = 'equal' | 'percentage' | 'fraction'
+
+export interface User {
+  id: number
+  username: string
+  name: string
+  is_admin: boolean
+  default_participant_ids: number[]
+  profile_picture_filename: string | null
+  profile_picture_mimetype: string | null
+  created_at: string
+}
+
+export interface Receipt {
+  id: number
+  created_by_id: number
+  payer_id: number
+  participant_ids: number[]
+  ocr_status: OcrStatus
+  date: string | null
+  total: number | null
+  vendor_name: string | null
+  settled: boolean
+  settled_at: string | null
+  image_filename: string | null
+  created_at: string
+}
+
+export interface LineItem {
+  id: number
+  receipt_id: number
+  description: string | null
+  quantity: number | null
+  price: number | null
+  total: number
+  item_order: number | null
+  type: string | null
+}
+
+export interface Allocation {
+  id: number
+  line_item_id: number
+  user_id: number
+  split_type: SplitType
+  split_value: number | null
+  amount: number
+}
+
+export interface ReceiptPreview {
+  id: number
+  vendor_name: string | null
+  total: number | null
+  line_items_total: number
+  ocr_mismatch: boolean
+  per_user: Record<string, number>
+}
+
+export interface GrandTotal {
+  user_id: number
+  payer_id: number
+  grand_total: number
+}
+
+export interface SettlePreview {
+  receipts: ReceiptPreview[]
+  grand_totals: GrandTotal[]
+  any_ocr_mismatch: boolean
+}

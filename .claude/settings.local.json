@@ -3,7 +3,10 @@
     "allow": [
       "Bash(pytest)",
       "Bash(python -m pytest tests/ --tb=short -q)",
-      "Bash(python -m pytest tests/test_auth.py::test_create_user_as_admin --tb=long -q)"
+      "Bash(python -m pytest tests/test_auth.py::test_create_user_as_admin --tb=long -q)",
+      "Bash(npm --version)",
+      "Bash(npm install *)",
+      "Bash(npm run *)"
     ]
   }
 }

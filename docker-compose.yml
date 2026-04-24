@@ -31,12 +31,22 @@ services:
       SECRET_KEY: changeme
       ADMIN_USERNAME: admin
       ADMIN_PASSWORD: changeme
+      CORS_ORIGINS: "http://localhost"
       VERYFI_CLIENT_ID: ""
       VERYFI_CLIENT_SECRET: ""
       VERYFI_USERNAME: ""
       VERYFI_API_KEY: ""
     volumes:
       - images:/app/images
+
+  frontend:
+    build:
+      context: ./frontend
+    restart: unless-stopped
+    depends_on:
+      - api
+    ports:
+      - "80:80"
 
 volumes:
   db_data:
