@@ -1,10 +1,11 @@
 import os
 import uuid
+from pydantic import BaseModel
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, status
 from fastapi.responses import FileResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from api.auth import get_current_user
+from api.auth import get_current_user, require_admin
 from api.db import get_db
 from api.log import get_logger
 from api.misc import get_config
@@ -16,6 +17,10 @@ PROFILE_PICTURE_PATH = get_config("PROFILE_PICTURE_PATH", "./images/profiles")
 log = get_logger(__name__)
 
 router = APIRouter(prefix="/users", tags=["users"])
+
+
+class _SetAdminBody(BaseModel):
+    is_admin: bool
 
 
 @router.get("", response_model=list[User])
@@ -90,6 +95,49 @@ async def get_user(user_id: int, db: AsyncSession = Depends(get_db)):
     if user is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
     return user
+
+
+@router.patch("/{user_id}/admin", response_model=User)
+async def set_user_admin(
+    user_id: int,
+    body: _SetAdminBody,
+    db: AsyncSession = Depends(get_db),
+    current_user: UserORM = Depends(require_admin),
+):
+    user = await db.get(UserORM, user_id)
+    if user is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    if user.id == current_user.id and not body.is_admin:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot remove your own admin privileges",
+        )
+
+    user.is_admin = body.is_admin
+    await db.commit()
+    await db.refresh(user)
+    log.info("User #%d admin status set to %s", user.id, user.is_admin)
+    return user
+
+
+@router.delete("/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_user(
+    user_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: UserORM = Depends(require_admin),
+):
+    user = await db.get(UserORM, user_id)
+    if user is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    if user.id == current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot delete your own account",
+        )
+
+    await db.delete(user)
+    await db.commit()
+    log.info("User #%d deleted by admin #%d", user.id, current_user.id)
 
 
 @router.get("/{user_id}/picture")

@@ -63,7 +63,7 @@ async def seed_admin(db: AsyncSession) -> None:
     username = get_config("ADMIN_USERNAME", "admin")
     password = get_config("ADMIN_PASSWORD", "changeme")
 
-    result = await db.execute(select(UserORM).limit(1))
+    result = await db.execute(select(UserORM).where(UserORM.username == username))
     if result.scalar_one_or_none() is not None:
         return
 

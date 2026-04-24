@@ -3,6 +3,7 @@ import os
 from pathlib import Path
 from unittest.mock import patch, AsyncMock
 
+import pytest
 import pytest_asyncio
 from httpx import AsyncClient, ASGITransport
 from sqlalchemy import text
@@ -15,6 +16,18 @@ from api.db import Base, get_db
 from api.auth import hash_password
 from api.misc import get_config
 from api.models import UserORM, ReceiptORM, LineItemORM
+from api.routers import users as users_router
+from api.routers import receipts as receipts_router
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _image_dirs(tmp_path_factory):
+    root = tmp_path_factory.mktemp("images")
+    users_router.PROFILE_PICTURE_PATH = str(root / "profiles")
+    receipts_router.RECEIPT_IMAGE_PATH = str(root / "receipts")
+    os.makedirs(users_router.PROFILE_PICTURE_PATH, exist_ok=True)
+    os.makedirs(receipts_router.RECEIPT_IMAGE_PATH, exist_ok=True)
+    yield
 
 _TEST_DB_URL = get_config(
     "TEST_DATABASE_URL",

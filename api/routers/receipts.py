@@ -6,6 +6,7 @@ from pydantic import BaseModel
 from fastapi import APIRouter, BackgroundTasks, Depends, Form, HTTPException, UploadFile, status
 from fastapi.responses import FileResponse
 from sqlalchemy import delete, or_, select
+from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
 from api.auth import get_current_user
 from api.db import get_db, AsyncSessionLocal
@@ -196,7 +197,12 @@ async def get_receipt(
     db: AsyncSession = Depends(get_db),
     _=Depends(get_current_user),
 ):
-    receipt = await db.get(ReceiptORM, receipt_id)
+    result = await db.execute(
+        select(ReceiptORM)
+        .options(selectinload(ReceiptORM.line_items))
+        .where(ReceiptORM.id == receipt_id)
+    )
+    receipt = result.scalar_one_or_none()
     if receipt is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Receipt not found")
     return receipt
@@ -252,6 +258,24 @@ async def add_line_item(
     await db.refresh(item)
     log.info("Receipt #%d item #%d added by user #%d", receipt_id, item.id, current_user.id)
     return item
+
+
+@router.get("/{receipt_id}/items", response_model=list[_LineItemOut])
+async def list_line_items(
+    receipt_id: int,
+    db: AsyncSession = Depends(get_db),
+    _=Depends(get_current_user),
+):
+    receipt = await db.get(ReceiptORM, receipt_id)
+    if receipt is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Receipt not found")
+
+    result = await db.execute(
+        select(LineItemORM)
+        .where(LineItemORM.receipt_id == receipt_id)
+        .order_by(LineItemORM.item_order, LineItemORM.id)
+    )
+    return result.scalars().all()
 
 
 @router.put("/{receipt_id}/items/{item_id}", response_model=_LineItemOut)
