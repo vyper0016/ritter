@@ -1,8 +1,21 @@
-import os
+from collections.abc import AsyncGenerator
+from pathlib import Path
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
 from sqlalchemy.orm import DeclarativeBase
+from api.log import get_logger
+from api.misc import get_config
 
-DATABASE_URL = os.getenv(
+log = get_logger(__name__)
+
+_VIEWS_DIR = Path(__file__).parent.parent / "sql" / "views"
+_VIEW_FILES = [
+    "receipt_balances.sql",
+    "unsettled_summary.sql",
+    "user_outstanding_totals.sql",
+]
+
+DATABASE_URL = get_config(
     "DATABASE_URL",
     "postgresql+asyncpg://postgres:postgres@localhost/ritter",
 )
@@ -15,6 +28,15 @@ class Base(DeclarativeBase):
     pass
 
 
-async def get_db() -> AsyncSession:
+async def get_db() -> AsyncGenerator[AsyncSession, None]:
     async with AsyncSessionLocal() as session:
         yield session
+
+
+async def setup_db() -> None:
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+        for fname in _VIEW_FILES:
+            sql = (_VIEWS_DIR / fname).read_text()
+            await conn.execute(text(sql))
+    log.info("Tables and views ready")

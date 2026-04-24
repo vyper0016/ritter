@@ -1,10 +1,10 @@
 from veryfi import Client
-from misc import get_config
-from receipt import Receipt
-from vendor import Vendor
-from line_item import LineItem
-from payment import Payment
-from ocr import OCRProvider
+from api.misc import get_config
+from api.receipt import Receipt
+from api.vendor import Vendor
+from api.line_item import LineItem
+from api.payment import Payment
+from api.ocr import OCRProvider
 
 class VeryfiProvider(OCRProvider):
     def __init__(self, client):

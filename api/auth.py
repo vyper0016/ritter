@@ -1,4 +1,3 @@
-import os
 from datetime import datetime, timedelta, timezone
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
@@ -7,9 +6,10 @@ from passlib.context import CryptContext
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from api.db import get_db
+from api.misc import get_config
 from api.models import UserORM
 
-SECRET_KEY = os.getenv("SECRET_KEY", "changeme")
+SECRET_KEY = get_config("SECRET_KEY", "changeme")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24  # 24h
 
@@ -58,8 +58,8 @@ async def require_admin(current_user: UserORM = Depends(get_current_user)) -> Us
 
 
 async def seed_admin(db: AsyncSession) -> None:
-    username = os.getenv("ADMIN_USERNAME", "admin")
-    password = os.getenv("ADMIN_PASSWORD", "changeme")
+    username = get_config("ADMIN_USERNAME", "admin")
+    password = get_config("ADMIN_PASSWORD", "changeme")
 
     result = await db.execute(select(UserORM).limit(1))
     if result.scalar_one_or_none() is not None:

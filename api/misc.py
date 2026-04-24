@@ -1,9 +1,11 @@
 import os
+from pathlib import Path
 
 IN_DOCKER = os.path.exists("/.dockerenv")
 if not IN_DOCKER:
     import json
-    with open("creds.json", "r") as f:
+    _creds_path = Path(__file__).parent.parent / "creds.json"
+    with open(_creds_path, "r") as f:
         creds = json.load(f)
 
 def get_config(key: str, default: str = "") -> str:

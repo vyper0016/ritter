@@ -1,45 +1,37 @@
 import os
 from contextlib import asynccontextmanager
-from fastapi import Depends, FastAPI
-from fastapi.security import OAuth2PasswordRequestForm
-from sqlalchemy.ext.asyncio import AsyncSession
-from api.auth import seed_admin, verify_password, create_access_token
-from api.db import get_db, AsyncSessionLocal
-from api.models import UserORM
-from api.routers import users, receipts
-from sqlalchemy import select
-from fastapi import HTTPException, status
+from fastapi import FastAPI
+from api.db import AsyncSessionLocal, setup_db
+from api.auth import seed_admin
+from api.log import configure_logging, get_logger
+from api.routers import auth, users, receipts, allocations, settle
+from api.routers.receipts import RECEIPT_IMAGE_PATH
+from api.routers.users import PROFILE_PICTURE_PATH
+
+log = get_logger(__name__)
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI):
-    os.makedirs(os.getenv("RECEIPT_IMAGE_PATH", "./images"), exist_ok=True)
+async def lifespan(_: FastAPI):
+    configure_logging()
+    os.makedirs(RECEIPT_IMAGE_PATH, exist_ok=True)
+    os.makedirs(PROFILE_PICTURE_PATH, exist_ok=True)
+    await setup_db()
+    log.info("DB ready")
     async with AsyncSessionLocal() as db:
         await seed_admin(db)
+    log.info("Startup complete")
     yield
 
 
 app = FastAPI(lifespan=lifespan)
+app.include_router(auth.router)
 app.include_router(users.router)
 app.include_router(receipts.router)
+app.include_router(allocations.router)
+app.include_router(settle.router)
 
 
 @app.get("/health")
 async def health_check():
     return {"status": "healthy"}
-
-
-@app.post("/auth/login")
-async def login(
-    form: OAuth2PasswordRequestForm = Depends(),
-    db: AsyncSession = Depends(get_db),
-):
-    result = await db.execute(select(UserORM).where(UserORM.username == form.username))
-    user = result.scalar_one_or_none()
-    if user is None or not verify_password(form.password, user.hashed_password):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid username or password",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-    return {"access_token": create_access_token(user.id), "token_type": "bearer"}

@@ -6,6 +6,5 @@ alembic
 python-jose[cryptography]
 passlib[bcrypt]
 python-multipart
-python-dotenv
 pydantic
 veryfi

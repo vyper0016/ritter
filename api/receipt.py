@@ -1,7 +1,7 @@
 from pydantic import BaseModel, Field, PastDatetime
-from vendor import Vendor
-from line_item import LineItem
-from payment import Payment
+from api.vendor import Vendor
+from api.line_item import LineItem
+from api.payment import Payment
 from datetime import datetime, timedelta
 
 class Receipt(BaseModel):
@@ -31,7 +31,7 @@ class Receipt(BaseModel):
 if __name__ == "__main__":
     # Example usage
     receipt = Receipt(
-        date="2024-01-01T12:00:00",
+        date=datetime.fromisoformat("2024-01-01T12:00:00"),
         line_items=[
             LineItem(description="Widget", quantity=2, price=3.50, total=7.00, order=0),
             LineItem(description="Gadget", quantity=1, price=5.00, total=5.00, order=1)

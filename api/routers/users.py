@@ -1,47 +1,27 @@
-from pydantic import BaseModel
-from fastapi import APIRouter, Depends, HTTPException, status
+import os
+import uuid
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, status
+from fastapi.responses import FileResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from api.auth import get_current_user, require_admin, hash_password
+from api.auth import get_current_user
 from api.db import get_db
+from api.log import get_logger
+from api.misc import get_config
 from api.models import UserORM
 from api.user import User
 
+PROFILE_PICTURE_PATH = get_config("PROFILE_PICTURE_PATH", "./images/profiles")
+
+log = get_logger(__name__)
+
 router = APIRouter(prefix="/users", tags=["users"])
-
-
-class _CreateBody(BaseModel):
-    username: str
-    password: str
-    name: str
-    is_admin: bool = False
 
 
 @router.get("", response_model=list[User])
 async def list_users(db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(UserORM))
     return result.scalars().all()
-
-
-@router.post("", response_model=User, status_code=status.HTTP_201_CREATED)
-async def create_user(
-    body: _CreateBody,
-    db: AsyncSession = Depends(get_db),
-    _: UserORM = Depends(require_admin),
-):
-    existing = await db.execute(select(UserORM).where(UserORM.username == body.username))
-    if existing.scalar_one_or_none() is not None:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Username taken")
-    user = UserORM(
-        username=body.username,
-        hashed_password=hash_password(body.password),
-        name=body.name,
-        is_admin=body.is_admin,
-    )
-    db.add(user)
-    await db.commit()
-    await db.refresh(user)
-    return user
 
 
 @router.get("/me/defaults", response_model=list[int])
@@ -60,9 +40,61 @@ async def set_defaults(
     return participant_ids
 
 
+@router.put("/me/picture", response_model=User)
+async def upload_profile_picture(
+    image: UploadFile,
+    db: AsyncSession = Depends(get_db),
+    current_user: UserORM = Depends(get_current_user),
+):
+    if current_user.profile_picture_path and os.path.exists(current_user.profile_picture_path):
+        os.remove(current_user.profile_picture_path)
+
+    ext = os.path.splitext(image.filename or "")[1]
+    filename = f"{uuid.uuid4()}{ext}"
+    file_path = os.path.join(PROFILE_PICTURE_PATH, filename)
+
+    contents = await image.read()
+    with open(file_path, "wb") as f:
+        f.write(contents)
+
+    current_user.profile_picture_path = file_path
+    current_user.profile_picture_filename = image.filename
+    current_user.profile_picture_mimetype = image.content_type
+    await db.commit()
+    await db.refresh(current_user)
+    log.info("User #%d uploaded profile picture: %s", current_user.id, image.filename)
+    return current_user
+
+
+@router.delete("/me/picture", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_profile_picture(
+    db: AsyncSession = Depends(get_db),
+    current_user: UserORM = Depends(get_current_user),
+):
+    if current_user.profile_picture_path is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No profile picture")
+
+    if os.path.exists(current_user.profile_picture_path):
+        os.remove(current_user.profile_picture_path)
+
+    current_user.profile_picture_path = None
+    current_user.profile_picture_filename = None
+    current_user.profile_picture_mimetype = None
+    await db.commit()
+    log.info("User #%d deleted profile picture", current_user.id)
+
+
 @router.get("/{user_id}", response_model=User)
 async def get_user(user_id: int, db: AsyncSession = Depends(get_db)):
     user = await db.get(UserORM, user_id)
     if user is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
     return user
+
+
+@router.get("/{user_id}/picture")
+async def get_profile_picture(user_id: int, db: AsyncSession = Depends(get_db)):
+    user = await db.get(UserORM, user_id)
+    if user is None or user.profile_picture_path is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No profile picture")
+    return FileResponse(user.profile_picture_path, media_type=user.profile_picture_mimetype)
