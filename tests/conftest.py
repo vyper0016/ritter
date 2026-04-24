@@ -45,11 +45,11 @@ async def engine():
 
 @pytest_asyncio.fixture
 async def db(engine):
+    async with engine.begin() as conn:
+        for table in reversed(Base.metadata.sorted_tables):
+            await conn.execute(table.delete())
     Session = async_sessionmaker(engine, expire_on_commit=False)
     async with Session() as session:
-        async with engine.begin() as conn:
-            for table in reversed(Base.metadata.sorted_tables):
-                await conn.execute(table.delete())
         yield session
 
 

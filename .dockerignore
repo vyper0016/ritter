@@ -1,0 +1,10 @@
+__pycache__/
+*.pyc
+.git/
+creds.json
+images/
+tests/
+samples/
+.pytest_cache/
+requirements-test.txt
+pytest.ini

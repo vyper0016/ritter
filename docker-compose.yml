@@ -1,0 +1,43 @@
+services:
+  db:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: ritter
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    ports:
+      - "15432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: postgresql+asyncpg://postgres:postgres@db/ritter
+      RECEIPT_IMAGE_PATH: /app/images/receipts
+      PROFILE_PICTURE_PATH: /app/images/profiles
+      SECRET_KEY: changeme
+      ADMIN_USERNAME: admin
+      ADMIN_PASSWORD: changeme
+      VERYFI_CLIENT_ID: ""
+      VERYFI_CLIENT_SECRET: ""
+      VERYFI_USERNAME: ""
+      VERYFI_API_KEY: ""
+    volumes:
+      - images:/app/images
+
+volumes:
+  db_data:
+  images:
