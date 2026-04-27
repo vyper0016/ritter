@@ -72,6 +72,7 @@ See [extensions/](extensions/) for Discord bot and n8n node integration.
 ## TODO
 
 - add local OCR provider like [receipt-ocr](https://github.com/bhimrazy/receipt-ocr)
+- add demo to readme
 
 ## License
 
