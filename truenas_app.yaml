@@ -4,7 +4,7 @@ services:
     restart: unless-stopped
     environment:
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres          # change this
+      POSTGRES_PASSWORD: postgres          # change this (no @s)
       POSTGRES_DB: ritter
     volumes:
       - db_data:/var/lib/postgresql/data

@@ -1,0 +1,17 @@
+version: '3.8'
+
+services:
+  ritter-bot:
+    build: .
+    container_name: ritter-discord-bot
+    restart: unless-stopped
+    env_file:
+      - .env
+    volumes:
+      - ritter-bot-data:/app/data
+    environment:
+      - PYTHONUNBUFFERED=1
+
+volumes:
+  ritter-bot-data:
+    driver: local

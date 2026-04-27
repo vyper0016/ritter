@@ -1,7 +1,17 @@
 creds.json
 samples/
 __pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
 pyrightconfig.json
 plan.md
 .env
+.env.*
+!.env.example
 t.py
+images/
+*.log
+.DS_Store
+.vscode/
+.idea/
