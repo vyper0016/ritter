@@ -1,15 +1,23 @@
 import os
+import secrets
 import uuid
+from datetime import datetime
 from pydantic import BaseModel
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, status
 from fastapi.responses import FileResponse
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from api.auth import get_current_user, require_admin
+from api.auth import (
+    get_current_user,
+    hash_api_key,
+    hash_password,
+    require_admin,
+    verify_password,
+)
 from api.db import get_db
 from api.log import get_logger
 from api.misc import get_config
-from api.models import ReceiptORM, UserORM
+from api.models import ApiKeyORM, ReceiptORM, UserORM
 from api.user import User
 
 PROFILE_PICTURE_PATH = get_config("PROFILE_PICTURE_PATH", "./images/profiles")
@@ -25,6 +33,28 @@ class _SetAdminBody(BaseModel):
 
 class _SetNameBody(BaseModel):
     name: str
+
+
+class _ChangePasswordBody(BaseModel):
+    current_password: str
+    new_password: str
+
+
+class _CreateApiKeyBody(BaseModel):
+    name: str
+
+
+class _ApiKeyOut(BaseModel):
+    id: int
+    name: str
+    key_prefix: str
+    created_at: datetime
+    last_used_at: datetime | None
+    model_config = {"from_attributes": True}
+
+
+class _CreateApiKeyOut(_ApiKeyOut):
+    key: str
 
 
 @router.get("", response_model=list[User])
@@ -75,6 +105,87 @@ async def delete_profile_picture(
     current_user.profile_picture_mimetype = None
     await db.commit()
     log.info("User #%d deleted profile picture", current_user.id)
+
+
+@router.put("/me/password", status_code=status.HTTP_204_NO_CONTENT)
+async def change_password(
+    body: _ChangePasswordBody,
+    db: AsyncSession = Depends(get_db),
+    current_user: UserORM = Depends(get_current_user),
+):
+    if not verify_password(body.current_password, current_user.hashed_password):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Current password incorrect",
+        )
+    if not body.new_password:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="New password cannot be empty",
+        )
+    current_user.hashed_password = hash_password(body.new_password)
+    await db.commit()
+    log.info("User #%d changed password", current_user.id)
+
+
+@router.get("/me/api-keys", response_model=list[_ApiKeyOut])
+async def list_api_keys(
+    db: AsyncSession = Depends(get_db),
+    current_user: UserORM = Depends(get_current_user),
+):
+    result = await db.execute(
+        select(ApiKeyORM)
+        .where(ApiKeyORM.user_id == current_user.id)
+        .order_by(ApiKeyORM.created_at.desc())
+    )
+    return result.scalars().all()
+
+
+@router.post("/me/api-keys", response_model=_CreateApiKeyOut, status_code=status.HTTP_201_CREATED)
+async def create_api_key(
+    body: _CreateApiKeyBody,
+    db: AsyncSession = Depends(get_db),
+    current_user: UserORM = Depends(get_current_user),
+):
+    name = body.name.strip()
+    if not name:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Name cannot be empty",
+        )
+    raw_key = f"rk_{secrets.token_urlsafe(32)}"
+    api_key = ApiKeyORM(
+        user_id=current_user.id,
+        name=name,
+        key_hash=hash_api_key(raw_key),
+        key_prefix=raw_key[:11],
+    )
+    db.add(api_key)
+    await db.commit()
+    await db.refresh(api_key)
+    log.info("User #%d created API key #%d (%r)", current_user.id, api_key.id, name)
+    return _CreateApiKeyOut(
+        id=api_key.id,
+        name=api_key.name,
+        key_prefix=api_key.key_prefix,
+        created_at=api_key.created_at,
+        last_used_at=api_key.last_used_at,
+        key=raw_key,
+    )
+
+
+@router.delete("/me/api-keys/{key_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_api_key(
+    key_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: UserORM = Depends(get_current_user),
+):
+    api_key = await db.get(ApiKeyORM, key_id)
+    if api_key is None or api_key.user_id != current_user.id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="API key not found")
+    await db.delete(api_key)
+    await db.commit()
+    log.info("User #%d deleted API key #%d", current_user.id, key_id)
 
 
 @router.get("/{user_id}", response_model=User)

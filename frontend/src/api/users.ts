@@ -21,3 +21,32 @@ export const deletePicture = () =>
   apiFetch<void>('/users/me/picture', { method: 'DELETE' })
 
 export const pictureUrl = (id: number) => `/api/users/${id}/picture`
+
+export const changePassword = (current_password: string, new_password: string) =>
+  apiFetch<void>('/users/me/password', {
+    method: 'PUT',
+    body: JSON.stringify({ current_password, new_password }),
+  })
+
+export interface ApiKey {
+  id: number
+  name: string
+  key_prefix: string
+  created_at: string
+  last_used_at: string | null
+}
+
+export interface CreatedApiKey extends ApiKey {
+  key: string
+}
+
+export const listApiKeys = () => apiFetch<ApiKey[]>('/users/me/api-keys')
+
+export const createApiKey = (name: string) =>
+  apiFetch<CreatedApiKey>('/users/me/api-keys', {
+    method: 'POST',
+    body: JSON.stringify({ name }),
+  })
+
+export const deleteApiKey = (id: number) =>
+  apiFetch<void>(`/users/me/api-keys/${id}`, { method: 'DELETE' })

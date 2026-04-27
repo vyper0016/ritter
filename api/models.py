@@ -48,6 +48,9 @@ class UserORM(Base):
     allocations: Mapped[list[ItemAllocationORM]] = relationship(
         back_populates="user", cascade="all, delete-orphan"
     )
+    api_keys: Mapped[list[ApiKeyORM]] = relationship(
+        back_populates="user", cascade="all, delete-orphan"
+    )
 
 
 class ReceiptORM(Base):
@@ -121,6 +124,24 @@ class LineItemORM(Base):
     allocations: Mapped[list[ItemAllocationORM]] = relationship(
         back_populates="line_item", cascade="all, delete-orphan"
     )
+
+
+class ApiKeyORM(Base):
+    __tablename__ = "api_keys"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    key_hash: Mapped[str] = mapped_column(String(255), nullable=False, unique=True)
+    key_prefix: Mapped[str] = mapped_column(String(16), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        nullable=False, server_default=func.now()
+    )
+    last_used_at: Mapped[datetime | None] = mapped_column(PG_TIMESTAMP(timezone=True))
+
+    user: Mapped[UserORM] = relationship(back_populates="api_keys")
 
 
 class ItemAllocationORM(Base):

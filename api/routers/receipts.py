@@ -9,7 +9,7 @@ from sqlalchemy import delete, or_, select
 from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
 from api.allocation import ParticipantShare, SplitType, resolve_allocations
-from api.auth import get_current_user
+from api.auth import get_current_user, get_user_via_api_key_or_token
 from api.db import get_db, AsyncSessionLocal
 from api.log import get_logger
 from api.misc import get_config
@@ -157,7 +157,7 @@ async def create_receipt(
     participant_ids: list[int] = Form(default=[]),
     image: UploadFile | None = None,
     db: AsyncSession = Depends(get_db),
-    current_user=Depends(get_current_user),
+    current_user=Depends(get_user_via_api_key_or_token),
 ):
     image_path = image_filename = image_mimetype = None
 

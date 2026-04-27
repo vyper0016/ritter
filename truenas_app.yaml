@@ -4,12 +4,10 @@ services:
     restart: unless-stopped
     environment:
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
+      POSTGRES_PASSWORD: postgres          # change this
       POSTGRES_DB: ritter
     volumes:
       - db_data:/var/lib/postgresql/data
-    ports:
-      - "15432:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 5s
@@ -17,23 +15,20 @@ services:
       retries: 5
 
   app:
-    build: .
+    image: boon00/ritter:latest
     restart: unless-stopped
     depends_on:
       db:
         condition: service_healthy
     ports:
       - "80:80"
-    env_file:
-      - path: .env
-        required: false
     environment:
-      DATABASE_URL: postgresql+asyncpg://postgres:postgres@db/ritter
+      DATABASE_URL: postgresql+asyncpg://postgres:postgres@db/ritter  # match POSTGRES_PASSWORD above
       RECEIPT_IMAGE_PATH: /app/images/receipts
       PROFILE_PICTURE_PATH: /app/images/profiles
-      SECRET_KEY: changeme
+      SECRET_KEY: changeme                 # change this to a long random string
       ADMIN_USERNAME: admin
-      ADMIN_PASSWORD: changeme
+      ADMIN_PASSWORD: changeme             # change this
     volumes:
       - images:/app/images
 

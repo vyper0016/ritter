@@ -1,13 +1,14 @@
+import hashlib
 from datetime import datetime, timedelta, timezone
 import bcrypt
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, Header, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError, jwt
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from api.db import get_db
 from api.misc import get_config
-from api.models import UserORM
+from api.models import ApiKeyORM, UserORM
 
 SECRET_KEY = get_config("SECRET_KEY", "changeme")
 ALGORITHM = "HS256"
@@ -25,6 +26,10 @@ def hash_password(password: str) -> str:
 
 def verify_password(plain: str, hashed: str) -> bool:
     return bcrypt.checkpw(plain.encode()[:_MAX_PW_BYTES], hashed.encode())
+
+
+def hash_api_key(key: str) -> str:
+    return hashlib.sha256(key.encode()).hexdigest()
 
 
 def create_access_token(user_id: int) -> str:
@@ -47,6 +52,43 @@ async def get_current_user(
     except (JWTError, KeyError, ValueError):
         raise credentials_error
 
+    user = await db.get(UserORM, user_id)
+    if user is None:
+        raise credentials_error
+    return user
+
+
+async def get_user_via_api_key_or_token(
+    x_api_key: str | None = Header(default=None),
+    token: str | None = Depends(OAuth2PasswordBearer(tokenUrl="/auth/login", auto_error=False)),
+    db: AsyncSession = Depends(get_db),
+) -> UserORM:
+    credentials_error = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Invalid credentials",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+
+    if x_api_key:
+        key_hash = hash_api_key(x_api_key)
+        result = await db.execute(select(ApiKeyORM).where(ApiKeyORM.key_hash == key_hash))
+        api_key = result.scalar_one_or_none()
+        if api_key is None:
+            raise credentials_error
+        api_key.last_used_at = datetime.now(timezone.utc)
+        await db.commit()
+        user = await db.get(UserORM, api_key.user_id)
+        if user is None:
+            raise credentials_error
+        return user
+
+    if not token:
+        raise credentials_error
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        user_id = int(payload["sub"])
+    except (JWTError, KeyError, ValueError):
+        raise credentials_error
     user = await db.get(UserORM, user_id)
     if user is None:
         raise credentials_error
