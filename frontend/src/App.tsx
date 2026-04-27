@@ -6,7 +6,6 @@ import Layout from './components/Layout'
 import LoginPage from './pages/LoginPage'
 import DashboardPage from './pages/DashboardPage'
 import NewReceiptPage from './pages/NewReceiptPage'
-import ReceiptDetailPage from './pages/ReceiptDetailPage'
 import SettleMultiplePage from './pages/SettleMultiplePage'
 import AdminPage from './pages/AdminPage'
 import ProfilePage from './pages/ProfilePage'
@@ -36,7 +35,6 @@ export default function App() {
             <Route path="/login" element={<LoginPage />} />
             <Route path="/" element={<RequireAuth><DashboardPage /></RequireAuth>} />
             <Route path="/receipts/new" element={<RequireAuth><NewReceiptPage /></RequireAuth>} />
-            <Route path="/receipts/:id" element={<RequireAuth><ReceiptDetailPage /></RequireAuth>} />
             <Route path="/settle" element={<RequireAuth><SettleMultiplePage /></RequireAuth>} />
             <Route path="/profile" element={<RequireAuth><ProfilePage /></RequireAuth>} />
             <Route path="/admin" element={<RequireAuth><RequireAdmin><AdminPage /></RequireAdmin></RequireAuth>} />

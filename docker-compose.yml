@@ -24,6 +24,9 @@ services:
         condition: service_healthy
     ports:
       - "8000:8000"
+    env_file:
+      - path: .env
+        required: false
     environment:
       DATABASE_URL: postgresql+asyncpg://postgres:postgres@db/ritter
       RECEIPT_IMAGE_PATH: /app/images/receipts
@@ -32,10 +35,6 @@ services:
       ADMIN_USERNAME: admin
       ADMIN_PASSWORD: changeme
       CORS_ORIGINS: "http://localhost"
-      VERYFI_CLIENT_ID: ""
-      VERYFI_CLIENT_SECRET: ""
-      VERYFI_USERNAME: ""
-      VERYFI_API_KEY: ""
     volumes:
       - images:/app/images
 

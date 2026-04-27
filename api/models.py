@@ -45,7 +45,9 @@ class UserORM(Base):
     receipts_paid: Mapped[list[ReceiptORM]] = relationship(
         back_populates="payer", foreign_keys="ReceiptORM.payer_id"
     )
-    allocations: Mapped[list[ItemAllocationORM]] = relationship(back_populates="user")
+    allocations: Mapped[list[ItemAllocationORM]] = relationship(
+        back_populates="user", cascade="all, delete-orphan"
+    )
 
 
 class ReceiptORM(Base):

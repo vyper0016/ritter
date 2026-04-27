@@ -3,13 +3,13 @@ import uuid
 from pydantic import BaseModel
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, status
 from fastapi.responses import FileResponse
-from sqlalchemy import select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from api.auth import get_current_user, require_admin
 from api.db import get_db
 from api.log import get_logger
 from api.misc import get_config
-from api.models import UserORM
+from api.models import ReceiptORM, UserORM
 from api.user import User
 
 PROFILE_PICTURE_PATH = get_config("PROFILE_PICTURE_PATH", "./images/profiles")
@@ -133,6 +133,7 @@ async def set_user_admin(
 @router.delete("/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_user(
     user_id: int,
+    force: bool = False,
     db: AsyncSession = Depends(get_db),
     current_user: UserORM = Depends(require_admin),
 ):
@@ -145,9 +146,29 @@ async def delete_user(
             detail="Cannot delete your own account",
         )
 
+    receipt_count = await db.scalar(
+        select(func.count()).select_from(ReceiptORM).where(
+            or_(ReceiptORM.created_by_id == user_id, ReceiptORM.payer_id == user_id)
+        )
+    )
+    if receipt_count and not force:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"User has {receipt_count} receipt(s). Use ?force=true to delete with all associated data.",
+        )
+
+    if receipt_count:
+        receipts = await db.scalars(
+            select(ReceiptORM).where(
+                or_(ReceiptORM.created_by_id == user_id, ReceiptORM.payer_id == user_id)
+            )
+        )
+        for receipt in receipts:
+            await db.delete(receipt)
+
     await db.delete(user)
     await db.commit()
-    log.info("User #%d deleted by admin #%d", user.id, current_user.id)
+    log.info("User #%d deleted by admin #%d (force=%s)", user.id, current_user.id, force)
 
 
 @router.get("/{user_id}/picture")

@@ -15,7 +15,6 @@ interface Props {
 interface Row {
   user_id: number
   enabled: boolean
-  split_type: SplitType
   split_value: string
 }
 
@@ -35,6 +34,7 @@ export default function AllocationEditor({
   })
 
   const [rows, setRows] = useState<Row[]>([])
+  const [splitType, setSplitType] = useState<SplitType>('equal')
   const [quickChoice, setQuickChoice] = useState<QuickChoice>('split')
   const [showAdvanced, setShowAdvanced] = useState(false)
   const autoAppliedDefault = useRef(false)
@@ -61,13 +61,13 @@ export default function AllocationEditor({
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['allocations', receiptId, itemId] })
+      qc.invalidateQueries({ queryKey: ['settle-preview'] })
     },
   })
 
   const mutation = useMutation({
     mutationFn: (payload: Row[]) => {
       const active = payload.filter((r) => r.enabled)
-      const splitType = active[0]?.split_type ?? 'equal'
       return setAllocations(
         receiptId,
         itemId,
@@ -75,13 +75,16 @@ export default function AllocationEditor({
           split_type: splitType,
           participants: active.map((r) => ({
             user_id: r.user_id,
-            value: r.split_value !== '' ? Number(r.split_value) : null,
+            value: splitType === 'equal'
+              ? null
+              : r.split_value !== '' ? Number(r.split_value) : null,
           })),
         },
       )
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['allocations', receiptId, itemId] })
+      qc.invalidateQueries({ queryKey: ['settle-preview'] })
     },
   })
 
@@ -100,11 +103,12 @@ export default function AllocationEditor({
       return {
         user_id: u.id,
         enabled: !!a,
-        split_type: (a?.split_type ?? 'equal') as SplitType,
         split_value: a?.split_value != null ? String(a.split_value) : '',
       }
     })
     setRows(nextRows)
+    const firstActive = existing?.find((x) => x.split_type)
+    setSplitType((firstActive?.split_type ?? 'equal') as SplitType)
 
     if (!existing || existing.length === 0) {
       setQuickChoice('split')
@@ -134,10 +138,17 @@ export default function AllocationEditor({
       setValidationError('Select at least one participant')
       return false
     }
-    if (active[0].split_type === 'percentage') {
+    if (splitType === 'percentage') {
       const sum = active.reduce((s, r) => s + (Number(r.split_value) || 0), 0)
       if (Math.abs(sum - 100) > 0.01) {
         setValidationError(`Percentages must sum to 100 (currently ${sum.toFixed(1)})`)
+        return false
+      }
+    }
+    if (splitType === 'fraction') {
+      const sum = active.reduce((s, r) => s + (Number(r.split_value) || 0), 0)
+      if (sum <= 0) {
+        setValidationError('Fraction values must sum to a positive number')
         return false
       }
     }
@@ -145,7 +156,6 @@ export default function AllocationEditor({
     return true
   }
 
-  const splitType = rows[0]?.split_type ?? 'equal'
   const activeCount = rows.filter((r) => r.enabled).length
   const quickValueSet = useMemo(
     () => new Set(['split', ...participants.map((u) => `user:${u.id}`)]),
@@ -167,8 +177,8 @@ export default function AllocationEditor({
         <select
           value={splitType}
           onChange={(e) => {
-            const t = e.target.value as SplitType
-            setRows((prev) => prev.map((r) => ({ ...r, split_type: t, split_value: '' })))
+            setSplitType(e.target.value as SplitType)
+            setRows((prev) => prev.map((r) => ({ ...r, split_value: '' })))
           }}
           className="text-xs border border-gray-300 rounded px-2 py-1"
         >
@@ -244,7 +254,7 @@ export default function AllocationEditor({
           <span
             className={
               compact
-                ? `w-7 h-7 rounded-full border flex items-center justify-center text-[10px] font-semibold ${selectedQuick === 'split' ? 'border-blue-500 bg-blue-100 text-blue-700' : 'border-gray-300 text-gray-600'}`
+                ? `w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold cursor-pointer ${selectedQuick === 'split' ? 'bg-blue-500 text-white border-2 border-blue-500' : 'bg-gray-100 text-gray-500 border-2 border-gray-200 hover:border-gray-400'}`
                 : 'text-xs text-gray-700'
             }
           >
@@ -269,17 +279,20 @@ export default function AllocationEditor({
                 className="sr-only"
               />
               <span
-                className={`w-7 h-7 rounded-full border overflow-hidden flex items-center justify-center text-[10px] font-semibold ${selected ? 'border-blue-500 ring-1 ring-blue-400' : 'border-gray-300'}`}
+                className={`w-8 h-8 rounded-full flex-shrink-0 cursor-pointer p-0.5 ${selected ? 'bg-blue-500' : 'bg-gray-300 hover:bg-gray-400'}`}
               >
                 {useImage ? (
-                  <img
-                    src={pictureUrl(u.id)}
-                    alt={u.name}
-                    className="w-full h-full object-cover"
-                    onError={() => setImageErrors((prev) => ({ ...prev, [u.id]: true }))}
-                  />
+                  <span className="w-full h-full rounded-full overflow-hidden block relative">
+                    <img
+                      src={pictureUrl(u.id)}
+                      alt={u.name}
+                      className="w-full h-full object-cover"
+                      onError={() => setImageErrors((prev) => ({ ...prev, [u.id]: true }))}
+                    />
+                    {selected && <span className="absolute inset-0 bg-blue-500/30" />}
+                  </span>
                 ) : (
-                  <span className="bg-blue-100 text-blue-700 w-full h-full flex items-center justify-center">
+                  <span className={`w-full h-full rounded-full flex items-center justify-center text-xs font-bold ${selected ? 'bg-blue-500 text-white' : 'bg-gray-100 text-gray-500'}`}>
                     {initials(u.name)}
                   </span>
                 )}
@@ -295,7 +308,7 @@ export default function AllocationEditor({
           title={showAdvanced ? 'Hide extra options' : 'Extra options'}
           className={
             compact
-              ? 'ml-1 w-7 h-7 rounded-full border border-gray-300 text-gray-600 hover:bg-gray-50 flex items-center justify-center text-sm leading-none'
+              ? 'ml-1 w-8 h-8 rounded-full ring-2 ring-gray-200 hover:ring-gray-400 text-gray-500 hover:bg-gray-50 flex items-center justify-center text-sm leading-none'
               : 'text-xs text-blue-600 hover:underline'
           }
         >

@@ -1,4 +1,6 @@
 import { Link } from 'react-router-dom'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { deleteReceipt } from '../api/receipts'
 import OcrBadge from './OcrBadge'
 import VendorLogo from './VendorLogo'
 import type { Receipt } from '../types'
@@ -10,32 +12,43 @@ interface Props {
 }
 
 export default function ReceiptCard({ receipt, selected = false, onToggleSelect }: Props) {
+  const qc = useQueryClient()
+  const deleteMutation = useMutation({
+    mutationFn: () => deleteReceipt(receipt.id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['receipts'] })
+      qc.invalidateQueries({ queryKey: ['settle-preview'] })
+    },
+  })
+
+  function handleDelete(e: React.MouseEvent) {
+    e.preventDefault()
+    e.stopPropagation()
+    if (!window.confirm('Delete this receipt?')) return
+    deleteMutation.mutate()
+  }
+
   return (
-    <div className="relative">
+    <div
+      className={`bg-white rounded-xl border flex items-center gap-3 px-3 py-3 ${
+        selected ? 'border-blue-300 bg-blue-50' : 'border-gray-200'
+      }`}
+    >
       {onToggleSelect && (
-        <div
-          className="absolute left-3 top-1/2 -translate-y-1/2 z-10"
-          onClick={(e) => {
-            e.preventDefault()
-            e.stopPropagation()
-            onToggleSelect(receipt.id)
-          }}
-        >
-          <input
-            type="checkbox"
-            checked={selected}
-            onChange={() => {}}
-            className="w-4 h-4 cursor-pointer accent-blue-600"
-          />
-        </div>
+        <input
+          type="checkbox"
+          checked={selected}
+          onChange={() => onToggleSelect(receipt.id)}
+          onClick={(e) => e.stopPropagation()}
+          className="w-5 h-5 cursor-pointer accent-blue-600 flex-shrink-0"
+        />
       )}
       <Link
-        to={`/receipts/${receipt.id}`}
-        className={`block bg-white rounded-xl border p-4 hover:shadow-sm transition-shadow ${
-          onToggleSelect ? 'pl-10' : ''
-        } ${selected ? 'border-blue-300 bg-blue-50' : 'border-gray-200'}`}
+        to="/settle"
+        state={{ receiptIds: [receipt.id] }}
+        className="flex-1 min-w-0 hover:opacity-80"
       >
-        <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center justify-between mb-1">
           <div className="flex items-center gap-2 min-w-0">
             <VendorLogo vendorName={receipt.vendor_name} vendorLogoUrl={receipt.vendor_logo_url} />
             <span className="font-medium text-gray-800 truncate">
@@ -62,6 +75,14 @@ export default function ReceiptCard({ receipt, selected = false, onToggleSelect 
           </div>
         </div>
       </Link>
+      <button
+        onClick={handleDelete}
+        disabled={deleteMutation.isPending}
+        className="text-gray-300 hover:text-red-600 disabled:opacity-50 flex-shrink-0 px-2 py-1 text-base"
+        title="Delete receipt"
+      >
+        ✕
+      </button>
     </div>
   )
 }

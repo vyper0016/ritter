@@ -63,3 +63,15 @@ export const updateItem = (
 
 export const deleteItem = (receiptId: number, itemId: number) =>
   apiFetch<void>(`/receipts/${receiptId}/items/${itemId}`, { method: 'DELETE' })
+
+export const updateParticipants = (
+  id: number,
+  data: { payer_id: number; participant_ids: number[] },
+) =>
+  apiFetch<Receipt>(`/receipts/${id}/participants`, {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  })
+
+export const getReceiptSummary = (receiptId: number) =>
+  apiFetch<{ user_id: number; total_owed: number }[]>(`/receipts/${receiptId}/summary`)

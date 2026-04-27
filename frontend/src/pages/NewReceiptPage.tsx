@@ -60,6 +60,7 @@ export default function NewReceiptPage() {
           <input
             type="file"
             accept="image/*"
+            capture="environment"
             onChange={(e) => setImage(e.target.files?.[0] ?? null)}
             className="text-sm text-gray-500"
           />

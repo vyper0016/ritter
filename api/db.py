@@ -36,6 +36,9 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
 async def setup_db() -> None:
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        await conn.execute(
+            text("ALTER TABLE users DROP COLUMN IF EXISTS default_participant_ids")
+        )
         for fname in _VIEW_FILES:
             sql = (_VIEWS_DIR / fname).read_text()
             await conn.execute(text(sql))

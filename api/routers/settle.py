@@ -102,6 +102,23 @@ async def settle(
     return {"settled": count}
 
 
+@router.post("/unsettle", status_code=status.HTTP_200_OK)
+async def unsettle(
+    body: _SettleBody,
+    db: AsyncSession = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    result = await db.execute(
+        update(ReceiptORM)
+        .where(ReceiptORM.settled.is_(True), ReceiptORM.id.in_(body.receipt_ids))
+        .values(settled=False, settled_at=None)
+    )
+    await db.commit()
+    count = cast(CursorResult, result).rowcount
+    log.info("User #%d unsettled %d receipt(s): %s", current_user.id, count, body.receipt_ids)
+    return {"unsettled": count}
+
+
 @router.post("/all", status_code=status.HTTP_200_OK)
 async def settle_all(
     db: AsyncSession = Depends(get_db),

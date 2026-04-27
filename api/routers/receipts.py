@@ -8,6 +8,7 @@ from fastapi.responses import FileResponse
 from sqlalchemy import delete, or_, select
 from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
+from api.allocation import ParticipantShare, SplitType, resolve_allocations
 from api.auth import get_current_user
 from api.db import get_db, AsyncSessionLocal
 from api.log import get_logger
@@ -77,6 +78,7 @@ class _ReceiptOut(BaseModel):
     settled_at: datetime | None
     created_at: datetime
     image_filename: str | None
+    image_mimetype: str | None
     model_config = {"from_attributes": True}
 
 
@@ -110,7 +112,8 @@ async def _run_ocr(receipt_id: int) -> None:
                 ))
             receipt.total = result.total
             receipt.vendor_name = result.vendor.name if result.vendor else None
-            receipt.date = result.date.date() if isinstance(result.date, datetime) else result.date
+            ocr_date = result.date.date() if isinstance(result.date, datetime) else result.date
+            receipt.date = ocr_date or receipt.created_at.date()
             raw_ocr_data = dict(result.raw_response or {})
             if result.vendor and result.vendor.raw_response:
                 raw_ocr_data["vendor"] = result.vendor.raw_response
@@ -133,6 +136,18 @@ async def require_receipt_owner(receipt_id: int, db: AsyncSession, current_user)
     if receipt.created_by_id != current_user.id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not receipt owner")
     return receipt
+
+
+async def _sync_receipt_total(receipt_id: int, db: AsyncSession) -> None:
+    """For image-less receipts, keep receipt.total in sync with sum of line items."""
+    receipt = await db.get(ReceiptORM, receipt_id)
+    if receipt is None or receipt.image_path is not None:
+        return
+    result = await db.execute(
+        select(LineItemORM).where(LineItemORM.receipt_id == receipt_id)
+    )
+    items = result.scalars().all()
+    receipt.total = sum(i.total for i in items) if items else None
 
 
 @router.post("", response_model=_ReceiptOut, status_code=status.HTTP_201_CREATED)
@@ -164,6 +179,7 @@ async def create_receipt(
         image_filename=image_filename,
         image_mimetype=image_mimetype,
         ocr_status=OcrStatus.pending if image is not None else OcrStatus.done,
+        date=None if image is not None else date.today(),
     )
     db.add(receipt)
     await db.commit()
@@ -297,6 +313,8 @@ async def add_line_item(
         type=body.type,
     )
     db.add(item)
+    await db.flush()
+    await _sync_receipt_total(receipt_id, db)
     await db.commit()
     await db.refresh(item)
     log.info("Receipt #%d item #%d added by user #%d", receipt_id, item.id, current_user.id)
@@ -347,9 +365,21 @@ async def edit_line_item(
 
     if body.total is not None and body.total != item.total:
         item.total = body.total
-        await db.execute(delete(ItemAllocationORM).where(ItemAllocationORM.line_item_id == item_id))
-        log.info("Receipt #%d item #%d total changed — allocations cleared", receipt_id, item_id)
+        existing_allocs = (await db.execute(
+            select(ItemAllocationORM).where(ItemAllocationORM.line_item_id == item_id)
+        )).scalars().all()
+        if existing_allocs:
+            split_type = existing_allocs[0].split_type
+            participants = [ParticipantShare(user_id=a.user_id, value=a.split_value) for a in existing_allocs]
+            try:
+                results = resolve_allocations(body.total, SplitType(split_type), participants)
+                for alloc, result in zip(existing_allocs, results):
+                    alloc.amount = result.amount
+            except ValueError:
+                await db.execute(delete(ItemAllocationORM).where(ItemAllocationORM.line_item_id == item_id))
+        log.info("Receipt #%d item #%d total changed — allocations recalculated", receipt_id, item_id)
 
+    await _sync_receipt_total(receipt_id, db)
     await db.commit()
     await db.refresh(item)
     log.info("Receipt #%d item #%d edited by user #%d", receipt_id, item_id, current_user.id)
@@ -368,5 +398,7 @@ async def delete_line_item(
     if item is None or item.receipt_id != receipt_id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Item not found")
     await db.delete(item)
+    await db.flush()
+    await _sync_receipt_total(receipt_id, db)
     await db.commit()
     log.info("Receipt #%d item #%d deleted by user #%d", receipt_id, item_id, current_user.id)
