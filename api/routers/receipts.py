@@ -13,7 +13,7 @@ from api.auth import get_current_user, get_user_via_api_key_or_token
 from api.db import get_db, AsyncSessionLocal
 from api.log import get_logger
 from api.misc import get_config
-from api.models import ItemAllocationORM, LineItemORM, OcrStatus, ReceiptORM
+from api.models import ItemAllocationORM, LineItemORM, OcrStatus, ReceiptORM, UserORM
 from api.ocr import get_ocr_provider
 
 DateType = date
@@ -129,6 +129,13 @@ async def _run_ocr(receipt_id: int) -> None:
         await db.commit()
 
 
+async def _resolve_participant_ids(ids: list[int], db: AsyncSession) -> list[int]:
+    if -1 in ids:
+        result = await db.execute(select(UserORM.id))
+        return list(result.scalars().all())
+    return ids
+
+
 async def require_receipt_owner(receipt_id: int, db: AsyncSession, current_user) -> ReceiptORM:
     receipt = await db.get(ReceiptORM, receipt_id)
     if receipt is None:
@@ -171,10 +178,11 @@ async def create_receipt(
         image_filename = image.filename
         image_mimetype = image.content_type
 
+    resolved_participants = await _resolve_participant_ids(participant_ids, db)
     receipt = ReceiptORM(
         created_by_id=current_user.id,
         payer_id=payer_id,
-        participant_ids=participant_ids,
+        participant_ids=resolved_participants,
         image_path=image_path,
         image_filename=image_filename,
         image_mimetype=image_mimetype,
@@ -272,7 +280,7 @@ async def update_participants(
 ):
     receipt = await require_receipt_owner(receipt_id, db, current_user)
     receipt.payer_id = body.payer_id
-    receipt.participant_ids = body.participant_ids
+    receipt.participant_ids = await _resolve_participant_ids(body.participant_ids, db)
     await db.commit()
     await db.refresh(receipt)
     log.info("Receipt #%d participants updated by user #%d", receipt_id, current_user.id)
