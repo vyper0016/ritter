@@ -15,6 +15,9 @@ class VeryfiProvider(OCRProvider):
         client = Client(get_config("VERYFI_CLIENT_ID"), get_config("VERYFI_CLIENT_SECRET"), get_config("VERYFI_USERNAME"), get_config("VERYFI_API_KEY"))
         return cls(client)
     
+    def test_connection(self) -> None:
+        self.client.get_documents()
+
     def process_document(self, file_path: str) -> Receipt:
         response = self.client.process_document(file_path, delete_after_processing=True)
         if not response.get("line_items", []):

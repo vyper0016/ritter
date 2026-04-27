@@ -25,6 +25,7 @@ export interface Receipt {
   settled_at: string | null
   image_filename: string | null
   image_mimetype: string | null
+  uploaded_through: string | null
   created_at: string
 }
 

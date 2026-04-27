@@ -239,6 +239,9 @@ export default function ReceiptPanel({ receiptId }: Props) {
           )}
           <span>
             Uploaded: <strong>{new Date(receipt.created_at).toLocaleDateString()}</strong>
+            {receipt.uploaded_through && (
+              <span className="ml-1.5 text-xs text-gray-400">via {receipt.uploaded_through}</span>
+            )}
           </span>
           {receipt.settled && receipt.settled_at && (
             <span>

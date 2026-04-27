@@ -36,6 +36,9 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
 async def setup_db() -> None:
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        await conn.execute(text(
+            "ALTER TABLE receipts ADD COLUMN IF NOT EXISTS uploaded_through VARCHAR(100)"
+        ))
         for fname in _VIEW_FILES:
             sql = (_VIEWS_DIR / fname).read_text()
             await conn.execute(text(sql))

@@ -79,6 +79,7 @@ class _ReceiptOut(BaseModel):
     created_at: datetime
     image_filename: str | None
     image_mimetype: str | None
+    uploaded_through: str | None = None
     model_config = {"from_attributes": True}
 
 
@@ -162,6 +163,7 @@ async def create_receipt(
     background_tasks: BackgroundTasks,
     payer_id: int = Form(...),
     participant_ids: list[int] = Form(default=[]),
+    uploaded_through: str | None = Form(default=None),
     image: UploadFile | None = None,
     db: AsyncSession = Depends(get_db),
     current_user=Depends(get_user_via_api_key_or_token),
@@ -188,6 +190,7 @@ async def create_receipt(
         image_mimetype=image_mimetype,
         ocr_status=OcrStatus.pending if image is not None else OcrStatus.done,
         date=None if image is not None else date.today(),
+        uploaded_through=uploaded_through,
     )
     db.add(receipt)
     await db.commit()

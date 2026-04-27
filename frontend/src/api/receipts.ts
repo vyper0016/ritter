@@ -38,6 +38,7 @@ export const createReceipt = ({ payer_id, participant_ids, image }: CreateReceip
   const form = new FormData()
   form.append('payer_id', String(payer_id))
   for (const p of participant_ids) form.append('participant_ids', String(p))
+  form.append('uploaded_through', 'UI upload')
   if (image) form.append('image', image)
   return apiFetch<Receipt>('/receipts', { method: 'POST', body: form })
 }

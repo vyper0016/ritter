@@ -77,6 +77,7 @@ class ReceiptORM(Base):
     image_path: Mapped[str | None] = mapped_column(Text)
     image_filename: Mapped[str | None] = mapped_column(String(255))
     image_mimetype: Mapped[str | None] = mapped_column(String(100))
+    uploaded_through: Mapped[str | None] = mapped_column(String(100))
 
     created_by: Mapped[UserORM] = relationship(
         back_populates="receipts_created", foreign_keys=[created_by_id]

@@ -18,5 +18,6 @@ CREATE TABLE IF NOT EXISTS receipts (
     created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     image_path       TEXT,
     image_filename   VARCHAR(255),
-    image_mimetype   VARCHAR(100)
+    image_mimetype   VARCHAR(100),
+    uploaded_through VARCHAR(100)
 );

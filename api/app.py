@@ -8,6 +8,7 @@ from api.auth import get_user_via_api_key_or_token, seed_admin
 from api.log import configure_logging, get_logger
 from api.misc import get_config
 from api.models import UserORM
+from api.ocr import get_ocr_provider, OCR_PROVIDER
 from api.routers import auth, users, receipts, allocations, settle
 from api.routers.receipts import RECEIPT_IMAGE_PATH
 from api.routers.users import PROFILE_PICTURE_PATH
@@ -48,6 +49,13 @@ async def lifespan(_: FastAPI):
     log.info("DB ready")
     async with AsyncSessionLocal() as db:
         await seed_admin(db)
+
+    try:
+        await asyncio.to_thread(get_ocr_provider().test_connection)
+        log.info("OCR provider '%s' OK", OCR_PROVIDER)
+    except Exception as exc:
+        log.warning("OCR provider '%s' test failed: %s", OCR_PROVIDER, exc)
+
     log.info("Startup complete")
     yield
 

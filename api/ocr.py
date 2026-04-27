@@ -18,3 +18,8 @@ class OCRProvider(ABC):
     @abstractmethod
     def process_document(self, file_path: str) -> Receipt:
         pass
+
+    @abstractmethod
+    def test_connection(self) -> None:
+        """Raise on failure."""
+        pass
