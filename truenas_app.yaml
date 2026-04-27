@@ -21,7 +21,7 @@ services:
       db:
         condition: service_healthy
     ports:
-      - "80:80"
+      - "3080:80"
     environment:
       DATABASE_URL: postgresql+asyncpg://postgres:postgres@db/ritter  # match POSTGRES_PASSWORD above
       RECEIPT_IMAGE_PATH: /app/images/receipts

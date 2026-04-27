@@ -1,4 +1,5 @@
 import os
+import asyncio
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -12,13 +13,37 @@ from api.routers.users import PROFILE_PICTURE_PATH
 
 log = get_logger(__name__)
 
+_DB_STARTUP_ATTEMPTS = 12
+_DB_STARTUP_DELAY_SECONDS = 2
+
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     configure_logging()
     os.makedirs(RECEIPT_IMAGE_PATH, exist_ok=True)
     os.makedirs(PROFILE_PICTURE_PATH, exist_ok=True)
-    await setup_db()
+
+    last_error: Exception | None = None
+    for attempt in range(1, _DB_STARTUP_ATTEMPTS + 1):
+        try:
+            await setup_db()
+            last_error = None
+            break
+        except Exception as exc:
+            last_error = exc
+            if attempt == _DB_STARTUP_ATTEMPTS:
+                break
+            log.warning(
+                "Database startup attempt %s/%s failed: %s",
+                attempt,
+                _DB_STARTUP_ATTEMPTS,
+                exc,
+            )
+            await asyncio.sleep(_DB_STARTUP_DELAY_SECONDS)
+
+    if last_error is not None:
+        raise last_error
+
     log.info("DB ready")
     async with AsyncSessionLocal() as db:
         await seed_admin(db)
