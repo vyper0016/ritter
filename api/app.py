@@ -1,12 +1,13 @@
 import os
 import asyncio
 from contextlib import asynccontextmanager
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from api.db import AsyncSessionLocal, setup_db
-from api.auth import seed_admin
+from api.auth import get_user_via_api_key_or_token, seed_admin
 from api.log import configure_logging, get_logger
 from api.misc import get_config
+from api.models import UserORM
 from api.routers import auth, users, receipts, allocations, settle
 from api.routers.receipts import RECEIPT_IMAGE_PATH
 from api.routers.users import PROFILE_PICTURE_PATH
@@ -72,3 +73,8 @@ app.include_router(settle.router)
 @app.get("/health")
 async def health_check():
     return {"status": "healthy"}
+
+
+@app.get("/test")
+async def test_api_key(current_user: UserORM = Depends(get_user_via_api_key_or_token)):
+    return {"status": "ok", "user_id": current_user.id, "username": current_user.username}
