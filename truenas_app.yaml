@@ -29,6 +29,7 @@ services:
       SECRET_KEY: changeme                 # change this to a long random string
       ADMIN_USERNAME: admin
       ADMIN_PASSWORD: changeme             # change this
+      TZ: Europe/Berlin             
       OCR_PROVIDER=veryfi
       VERYFI_CLIENT_ID=
       VERYFI_CLIENT_SECRET=
