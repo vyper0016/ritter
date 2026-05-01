@@ -1,11 +1,11 @@
-from pydantic import BaseModel, Field, PastDatetime
+from pydantic import BaseModel, Field
 from api.vendor import Vendor
 from api.line_item import LineItem
 from api.payment import Payment
 from datetime import datetime, timedelta
 
 class Receipt(BaseModel):
-    date: PastDatetime | None = None
+    date: datetime | None = None
     vendor: Vendor | None = None
     line_items: list[LineItem]
     total: float

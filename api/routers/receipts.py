@@ -274,6 +274,33 @@ async def delete_receipt(
     log.info("Receipt #%d deleted by user #%d", receipt_id, current_user.id)
 
 
+@router.post("/{receipt_id}/retry-ocr", response_model=_ReceiptOut)
+async def retry_ocr(
+    receipt_id: int,
+    background_tasks: BackgroundTasks,
+    db: AsyncSession = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    receipt = await require_receipt_owner(receipt_id, db, current_user)
+    if receipt.image_path is None:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Receipt has no image to OCR")
+    if receipt.ocr_status in (OcrStatus.pending, OcrStatus.processing):
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="OCR already in progress")
+
+    await db.execute(delete(LineItemORM).where(LineItemORM.receipt_id == receipt_id))
+    receipt.total = None
+    receipt.vendor_name = None
+    receipt.date = None
+    receipt.raw_ocr_data = None
+    receipt.ocr_status = OcrStatus.pending
+    await db.commit()
+    await db.refresh(receipt)
+
+    background_tasks.add_task(_run_ocr, receipt_id)
+    log.info("Receipt #%d OCR retry queued by user #%d", receipt_id, current_user.id)
+    return receipt
+
+
 @router.put("/{receipt_id}/participants", response_model=_ReceiptOut)
 async def update_participants(
     receipt_id: int,

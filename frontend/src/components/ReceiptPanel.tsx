@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { getReceipt, getItems, addItem, deleteItem, updateReceiptMeta, updateItem, updateParticipants } from '../api/receipts'
+import { getReceipt, getItems, addItem, deleteItem, updateReceiptMeta, updateItem, updateParticipants, retryReceiptOcr } from '../api/receipts'
 import { getUsers } from '../api/users'
 import OcrBadge from './OcrBadge'
 import ReceiptImageZoom from './ReceiptImageZoom'
@@ -123,6 +123,15 @@ export default function ReceiptPanel({ receiptId }: Props) {
     },
   })
 
+  const retryOcrMutation = useMutation({
+    mutationFn: () => retryReceiptOcr(receiptId),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['receipt', receiptId] })
+      qc.invalidateQueries({ queryKey: ['items', receiptId] })
+      qc.invalidateQueries({ queryKey: ['receipts'] })
+    },
+  })
+
   const updatePayerMutation = useMutation({
     mutationFn: (newPayerId: number) =>
       updateParticipants(receiptId, {
@@ -192,6 +201,16 @@ export default function ReceiptPanel({ receiptId }: Props) {
           </div>
           <div className="flex items-center gap-2">
             <OcrBadge status={receipt.ocr_status} />
+            {receipt.ocr_status === 'failed' && canEditMeta && receipt.image_filename && (
+              <button
+                type="button"
+                onClick={() => retryOcrMutation.mutate()}
+                disabled={retryOcrMutation.isPending}
+                className="text-xs px-2 py-0.5 rounded-full font-medium bg-blue-100 text-blue-700 hover:bg-blue-200 disabled:opacity-50"
+              >
+                {retryOcrMutation.isPending ? 'retrying…' : 'retry OCR'}
+              </button>
+            )}
           </div>
         </div>
         <div className="flex flex-wrap gap-4 text-sm text-gray-600">

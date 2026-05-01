@@ -25,6 +25,9 @@ export const getReceipt = (id: number) => apiFetch<Receipt>(`/receipts/${id}`)
 export const deleteReceipt = (id: number) =>
   apiFetch<void>(`/receipts/${id}`, { method: 'DELETE' })
 
+export const retryReceiptOcr = (id: number) =>
+  apiFetch<Receipt>(`/receipts/${id}/retry-ocr`, { method: 'POST' })
+
 export const updateReceiptMeta = (
   id: number,
   data: { vendor_name: string | null; date: string | null },
