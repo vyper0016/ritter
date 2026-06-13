@@ -24,7 +24,9 @@ cp .env.example .env       # fill in Veryfi creds
 docker compose up -d
 ```
 
-App on `http://localhost:80`. Default admin: `admin` / `changeme` (change `ADMIN_PASSWORD` in `docker-compose.yml`).
+App on `http://localhost:80`. Default admin: `admin` / `changeme`.
+
+> **Before exposing publicly:** change `SECRET_KEY` and `ADMIN_PASSWORD` in `docker-compose.yml`. Defaults are insecure.
 
 ## Configuration
 
@@ -72,9 +74,8 @@ See [extensions/](extensions/) for Discord bot and n8n node integration.
 
 ## TODO
 
-- add local OCR provider like [receipt-ocr](https://github.com/bhimrazy/receipt-ocr)
-- add demo to readme
+- Local OCR provider like [receipt-ocr](https://github.com/bhimrazy/receipt-ocr)
 
 ## License
 
-MIT
+[MIT](LICENSE) © vyper0016
