@@ -109,7 +109,7 @@ async def test_set_allocations_replaces_existing(client, user_token, db, receipt
     assert len(allocs) == 1
 
 
-async def test_non_owner_cannot_set_allocations(client, admin_token, receipt_with_item):
+async def test_non_participant_cannot_set_allocations(client, admin_token, receipt_with_item):
     receipt, item = receipt_with_item
     resp = await client.put(
         f"/receipts/{receipt.id}/items/{item.id}/allocations",
@@ -117,3 +117,19 @@ async def test_non_owner_cannot_set_allocations(client, admin_token, receipt_wit
         headers={"Authorization": f"Bearer {admin_token}"},
     )
     assert resp.status_code == 403
+
+
+async def test_participant_can_set_allocations(client, db, admin, admin_token, receipt_with_item):
+    receipt, item = receipt_with_item
+    receipt.participant_ids = list(receipt.participant_ids) + [admin.id]
+    await db.commit()
+
+    resp = await client.put(
+        f"/receipts/{receipt.id}/items/{item.id}/allocations",
+        json={"split_type": "equal", "participants": [{"user_id": receipt.payer_id}]},
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert resp.status_code == 200
+
+    receipt.participant_ids = [uid for uid in receipt.participant_ids if uid != admin.id]
+    await db.commit()

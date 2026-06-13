@@ -7,7 +7,7 @@ from api.auth import get_current_user
 from api.db import get_db
 from api.log import get_logger
 from api.models import ItemAllocationORM, LineItemORM, ReceiptORM
-from api.routers.receipts import require_receipt_owner
+from api.routers.receipts import require_receipt_owner, require_receipt_participant
 
 log = get_logger(__name__)
 
@@ -61,7 +61,7 @@ async def set_item_allocations(
     db: AsyncSession = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
-    await require_receipt_owner(receipt_id, db, current_user)
+    await require_receipt_participant(receipt_id, db, current_user)
 
     item = await db.get(LineItemORM, item_id)
     if item is None or item.receipt_id != receipt_id:

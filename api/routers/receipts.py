@@ -146,6 +146,15 @@ async def require_receipt_owner(receipt_id: int, db: AsyncSession, current_user)
     return receipt
 
 
+async def require_receipt_participant(receipt_id: int, db: AsyncSession, current_user) -> ReceiptORM:
+    receipt = await db.get(ReceiptORM, receipt_id)
+    if receipt is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Receipt not found")
+    if receipt.created_by_id != current_user.id and current_user.id not in (receipt.participant_ids or []):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not a receipt participant")
+    return receipt
+
+
 async def _sync_receipt_total(receipt_id: int, db: AsyncSession) -> None:
     """For image-less receipts, keep receipt.total in sync with sum of line items."""
     receipt = await db.get(ReceiptORM, receipt_id)
