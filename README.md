@@ -35,6 +35,7 @@ Set via env vars (see `.env.example` and `docker-compose.yml`):
 | `DATABASE_URL` | Postgres async URL |
 | `SECRET_KEY` | JWT signing — change in prod |
 | `ADMIN_USERNAME` / `ADMIN_PASSWORD` | Seeded admin |
+| `AUTH_COOKIE_TTL_HOURS` | Login session lifetime in hours (default 24) |
 | `OCR_PROVIDER` | `veryfi` |
 | `VERYFI_*` | Veryfi API creds |
 | `RECEIPT_IMAGE_PATH` / `PROFILE_PICTURE_PATH` | Image storage paths |

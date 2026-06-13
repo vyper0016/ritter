@@ -34,6 +34,7 @@ services:
       SECRET_KEY: changeme
       ADMIN_USERNAME: admin
       ADMIN_PASSWORD: changeme
+      AUTH_COOKIE_TTL_HOURS: 24
     volumes:
       - images:/app/images
 

@@ -12,7 +12,8 @@ from api.models import ApiKeyORM, UserORM
 
 SECRET_KEY = get_config("SECRET_KEY", "changeme")
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24  # 24h
+AUTH_COOKIE_TTL_HOURS = int(get_config("AUTH_COOKIE_TTL_HOURS", "24"))
+ACCESS_TOKEN_EXPIRE_MINUTES = AUTH_COOKIE_TTL_HOURS * 60
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
 
