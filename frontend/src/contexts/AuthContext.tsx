@@ -2,6 +2,7 @@ import { createContext, useContext, useState, useEffect } from 'react'
 import type { ReactNode } from 'react'
 import { jwtDecode } from 'jwt-decode'
 import { getUser } from '../api/users'
+import { ApiError } from '../api/client'
 import type { User } from '../types'
 
 interface AuthCtx {
@@ -41,7 +42,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const userId = parseInt(decoded.sub)
     getUser(userId)
       .then(setUser)
-      .catch(() => setToken(null))
+      .catch((err) => {
+        // only drop the token if the server rejected it, not on network/5xx errors
+        if (err instanceof ApiError && err.status === 401) setToken(null)
+      })
       .finally(() => setLoading(false))
   }, [token])
 
