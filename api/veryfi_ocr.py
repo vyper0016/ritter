@@ -1,3 +1,4 @@
+import re
 from veryfi import Client
 from api.misc import get_config
 from api.receipt import Receipt
@@ -5,6 +6,9 @@ from api.vendor import Vendor
 from api.line_item import LineItem
 from api.payment import Payment
 from api.ocr import OCRProvider
+
+# German base price line, e.g. "79,00 € je 1 l." / "0,10 € je 1 St."
+BASE_PRICE_LINE = re.compile(r"\d+,\d{2}\s*\S?\s*je\s+1\s+\w+\.?\s*$")
 
 class VeryfiProvider(OCRProvider):
     def __init__(self, client):
@@ -55,9 +59,29 @@ class VeryfiProvider(OCRProvider):
         )
 
     @staticmethod
+    def merge_base_price_lines(line_items_response: list[dict]) -> list[dict]:
+        """
+        Veryfi splits two-line items (e.g. dm online invoices) into two line items:
+            "Rexona                                    3,95 € (1)   1   3,95 €"
+            "Antitranspirant Deostick ..., 50 ml       79,00 € je 1 l."
+        The second line only holds the product name and the base price (Grundpreis), which
+        Veryfi reports as an extra item. Fold its name into the previous item and drop it.
+        """
+        merged = []
+        for item in line_items_response:
+            text = item.get("text") or ""
+            if merged and BASE_PRICE_LINE.search(text):
+                name = (item.get("description") or text).split("\n")[0].split("\t")[0].strip()
+                prev = merged[-1]
+                prev["description"] = f"{prev.get('description') or ''} {name}".strip()
+                continue
+            merged.append(dict(item))
+        return merged
+
+    @staticmethod
     def parse_line_items(line_items_response: list[dict]):
         line_items = []
-        for item in line_items_response:
+        for item in VeryfiProvider.merge_base_price_lines(line_items_response):
             total = item.get("total")
             quantity = item.get("quantity")
             price = item.get("price")
