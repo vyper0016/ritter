@@ -1,6 +1,7 @@
 .env
 connections.json
 bot_config.json
+bot.log*
 __pycache__/
 *.pyc
 data/
