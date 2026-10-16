@@ -122,15 +122,22 @@ export default function DashboardPage() {
           <button
             onClick={() => quickUploadRef.current?.click()}
             disabled={quickUploadMutation.isPending || !user}
+            title="Upload image or PDF"
+            aria-label="Upload image or PDF"
             className="border border-gray-300 text-gray-700 text-sm px-4 py-2 rounded-lg hover:bg-gray-50 disabled:opacity-50"
           >
-            {quickUploadMutation.isPending ? 'Uploading…' : '📷'}
+            {quickUploadMutation.isPending ? 'Uploading…' : (
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                <polyline points="17 8 12 3 7 8" />
+                <line x1="12" y1="3" x2="12" y2="15" />
+              </svg>
+            )}
           </button>
           <input
             ref={quickUploadRef}
             type="file"
-            accept="image/*"
-            capture="environment"
+            accept="image/*,application/pdf"
             className="hidden"
             onChange={(e) => {
               const f = e.target.files?.[0]

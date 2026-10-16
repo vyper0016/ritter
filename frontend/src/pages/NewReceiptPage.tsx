@@ -56,11 +56,10 @@ export default function NewReceiptPage() {
 
       <div className="space-y-5">
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Image (optional)</label>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Image or PDF (optional)</label>
           <input
             type="file"
-            accept="image/*"
-            capture="environment"
+            accept="image/*,application/pdf"
             onChange={(e) => setImage(e.target.files?.[0] ?? null)}
             className="text-sm text-gray-500"
           />
