@@ -148,7 +148,8 @@ export default function ReceiptPanel({ receiptId }: Props) {
 
   const participants = users?.filter((u) => receipt?.participant_ids.includes(u.id)) ?? []
   const payer = users?.find((u) => u.id === receipt?.payer_id)
-  const canEditMeta = user?.id === receipt?.created_by_id
+  const canEdit = !!user && !!receipt &&
+    (user.id === receipt.created_by_id || receipt.participant_ids.includes(user.id))
 
   // Initialize item edits when items load or change
   useEffect(() => {
@@ -201,7 +202,7 @@ export default function ReceiptPanel({ receiptId }: Props) {
           </div>
           <div className="flex items-center gap-2">
             <OcrBadge status={receipt.ocr_status} />
-            {receipt.ocr_status === 'failed' && canEditMeta && receipt.image_filename && (
+            {receipt.ocr_status === 'failed' && canEdit && receipt.image_filename && (
               <button
                 type="button"
                 onClick={() => retryOcrMutation.mutate()}
@@ -294,7 +295,7 @@ export default function ReceiptPanel({ receiptId }: Props) {
             )}
           </div>
         )}
-        {canEditMeta && (
+        {canEdit && (
           <div className="mt-4 grid grid-cols-1 sm:grid-cols-[1fr_auto_auto] gap-2 items-end">
             <div>
               <label className="block text-xs text-gray-500 mb-1">Vendor</label>

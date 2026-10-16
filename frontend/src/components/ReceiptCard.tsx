@@ -9,9 +9,10 @@ interface Props {
   receipt: Receipt
   selected?: boolean
   onToggleSelect?: (id: number) => void
+  canDelete?: boolean
 }
 
-export default function ReceiptCard({ receipt, selected = false, onToggleSelect }: Props) {
+export default function ReceiptCard({ receipt, selected = false, onToggleSelect, canDelete = false }: Props) {
   const qc = useQueryClient()
   const deleteMutation = useMutation({
     mutationFn: () => deleteReceipt(receipt.id),
@@ -75,14 +76,16 @@ export default function ReceiptCard({ receipt, selected = false, onToggleSelect 
           </div>
         </div>
       </Link>
-      <button
-        onClick={handleDelete}
-        disabled={deleteMutation.isPending}
-        className="text-gray-300 hover:text-red-600 disabled:opacity-50 flex-shrink-0 px-2 py-1 text-base"
-        title="Delete receipt"
-      >
-        ✕
-      </button>
+      {canDelete && (
+        <button
+          onClick={handleDelete}
+          disabled={deleteMutation.isPending}
+          className="text-gray-300 hover:text-red-600 disabled:opacity-50 flex-shrink-0 px-2 py-1 text-base"
+          title="Delete receipt"
+        >
+          ✕
+        </button>
+      )}
     </div>
   )
 }

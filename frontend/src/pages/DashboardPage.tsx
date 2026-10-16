@@ -58,6 +58,8 @@ export default function DashboardPage() {
   }
 
   const unsettledVisible = receipts?.filter((r) => !r.settled) ?? []
+  const deletableSelectedIds = [...selectedIds].filter((id) =>
+    receipts?.some((r) => r.id === id && r.created_by_id === user?.id))
   const showSettleUI = true
 
   function toggleSort(field: 'date' | 'vendor') {
@@ -89,16 +91,16 @@ export default function DashboardPage() {
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-semibold text-gray-800">Receipts</h1>
         <div className="flex items-center gap-2 flex-wrap justify-end">
-          {selectedIds.size > 0 && (
+          {deletableSelectedIds.length > 0 && (
             <button
               onClick={() => {
-                if (!window.confirm(`Delete ${selectedIds.size} receipt(s)?`)) return
-                deleteSelectedMutation.mutate([...selectedIds])
+                if (!window.confirm(`Delete ${deletableSelectedIds.length} receipt(s)?`)) return
+                deleteSelectedMutation.mutate(deletableSelectedIds)
               }}
               disabled={deleteSelectedMutation.isPending}
               className="border border-red-300 text-red-600 text-sm px-4 py-2 rounded-lg hover:bg-red-50 disabled:opacity-50"
             >
-              {deleteSelectedMutation.isPending ? 'Deleting…' : `Delete (${selectedIds.size})`}
+              {deleteSelectedMutation.isPending ? 'Deleting…' : `Delete (${deletableSelectedIds.length})`}
             </button>
           )}
           {showSettleUI && selectedIds.size > 0 && [...selectedIds].some((id) => receipts?.find((r) => r.id === id && !r.settled)) && (
@@ -198,6 +200,7 @@ export default function DashboardPage() {
             receipt={r}
             selected={selectedIds.has(r.id)}
             onToggleSelect={toggleSelect}
+            canDelete={r.created_by_id === user?.id}
           />
         ))}
       </div>

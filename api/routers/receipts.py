@@ -290,7 +290,7 @@ async def retry_ocr(
     db: AsyncSession = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
-    receipt = await require_receipt_owner(receipt_id, db, current_user)
+    receipt = await require_receipt_participant(receipt_id, db, current_user)
     if receipt.image_path is None:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Receipt has no image to OCR")
     if receipt.ocr_status in (OcrStatus.pending, OcrStatus.processing):
@@ -317,7 +317,7 @@ async def update_participants(
     db: AsyncSession = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
-    receipt = await require_receipt_owner(receipt_id, db, current_user)
+    receipt = await require_receipt_participant(receipt_id, db, current_user)
     receipt.payer_id = body.payer_id
     receipt.participant_ids = await _resolve_participant_ids(body.participant_ids, db)
     await db.commit()
@@ -333,7 +333,7 @@ async def update_receipt_meta(
     db: AsyncSession = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
-    receipt = await require_receipt_owner(receipt_id, db, current_user)
+    receipt = await require_receipt_participant(receipt_id, db, current_user)
     receipt.vendor_name = body.vendor_name.strip() if body.vendor_name else None
     receipt.date = body.date
     await db.commit()
@@ -349,7 +349,7 @@ async def add_line_item(
     db: AsyncSession = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
-    await require_receipt_owner(receipt_id, db, current_user)
+    await require_receipt_participant(receipt_id, db, current_user)
     item = LineItemORM(
         receipt_id=receipt_id,
         description=body.description,
@@ -394,7 +394,7 @@ async def edit_line_item(
     db: AsyncSession = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
-    await require_receipt_owner(receipt_id, db, current_user)
+    await require_receipt_participant(receipt_id, db, current_user)
     item = await db.get(LineItemORM, item_id)
     if item is None or item.receipt_id != receipt_id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Item not found")
@@ -440,7 +440,7 @@ async def delete_line_item(
     db: AsyncSession = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
-    await require_receipt_owner(receipt_id, db, current_user)
+    await require_receipt_participant(receipt_id, db, current_user)
     item = await db.get(LineItemORM, item_id)
     if item is None or item.receipt_id != receipt_id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Item not found")

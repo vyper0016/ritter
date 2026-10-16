@@ -159,6 +159,50 @@ async def test_delete_receipt_non_owner_forbidden(client, admin_token, receipt):
     assert resp.status_code == 403
 
 
+async def test_delete_receipt_participant_forbidden(client, admin_token, admin, db, receipt):
+    receipt.participant_ids = [receipt.created_by_id, admin.id]
+    await db.commit()
+    resp = await client.delete(
+        f"/receipts/{receipt.id}",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert resp.status_code == 403
+
+
+async def test_participant_can_edit_receipt(client, admin_token, admin, db, receipt_with_item):
+    from api.models import LineItemORM
+    receipt, item = receipt_with_item
+    receipt.participant_ids = [receipt.created_by_id, admin.id]
+    await db.commit()
+    headers = {"Authorization": f"Bearer {admin_token}"}
+
+    resp = await client.put(
+        f"/receipts/{receipt.id}/meta",
+        json={"vendor_name": "Participant Vendor", "date": "2026-04-03"},
+        headers=headers,
+    )
+    assert resp.status_code == 200
+
+    resp = await client.put(
+        f"/receipts/{receipt.id}/items/{item.id}",
+        json={"description": "Tea"},
+        headers=headers,
+    )
+    assert resp.status_code == 200
+
+    resp = await client.post(
+        f"/receipts/{receipt.id}/items",
+        json={"description": "Cake", "total": 4.0},
+        headers=headers,
+    )
+    assert resp.status_code == 201
+
+    resp = await client.delete(f"/receipts/{receipt.id}/items/{item.id}", headers=headers)
+    assert resp.status_code == 204
+    db.expire_all()
+    assert await db.get(LineItemORM, item.id) is None
+
+
 async def test_list_filter_settled_false(client, user_token, db, user):
     from api.models import ReceiptORM as R
     r1 = R(created_by_id=user.id, payer_id=user.id, participant_ids=[user.id], settled=False)
