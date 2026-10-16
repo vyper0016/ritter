@@ -102,9 +102,35 @@ export default function ProfilePage() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['api-keys'] }),
   })
 
-  function copyKey() {
+  async function copyKey() {
     if (!createdKey) return
-    navigator.clipboard.writeText(createdKey.key)
+    const text = createdKey.key
+    let ok = false
+    // navigator.clipboard is only available in secure contexts (HTTPS/localhost)
+    if (navigator.clipboard && window.isSecureContext) {
+      try {
+        await navigator.clipboard.writeText(text)
+        ok = true
+      } catch {
+        ok = false
+      }
+    }
+    if (!ok) {
+      const ta = document.createElement('textarea')
+      ta.value = text
+      ta.setAttribute('readonly', '')
+      ta.style.position = 'fixed'
+      ta.style.opacity = '0'
+      document.body.appendChild(ta)
+      ta.select()
+      try {
+        ok = document.execCommand('copy')
+      } catch {
+        ok = false
+      }
+      document.body.removeChild(ta)
+    }
+    if (!ok) return
     setKeyCopied(true)
     setTimeout(() => setKeyCopied(false), 2000)
   }
