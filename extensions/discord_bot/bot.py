@@ -10,6 +10,9 @@ from discord.ext import commands
 import ritter_api
 import json
 import asyncio
+import time
+
+__version__ = "0.1.0"
 
 dotenv_path = Path(__file__).parent / ".env"
 if dotenv_path.exists():
@@ -337,7 +340,7 @@ async def status(interaction: discord.Interaction) -> None:
 	channel = interaction.channel
 	log.info("/status in %s by %s [%s]", channel.id, interaction.user, interaction.user.id)
 
-	lines = []
+	lines = [f"-# Ritter bot v{__version__}"]
 	if channel.id in watched_channel_ids:
 		lines.append(f"✅ {channel.mention} is **watched** - receipts posted here are uploaded.")
 	else:
@@ -415,15 +418,21 @@ async def ping(interaction: discord.Interaction) -> None:
 
 
 if __name__ == "__main__":
+	log.info("Starting ritter discord bot v%s", __version__)
 
 	token = os.getenv("DISCORD_TOKEN")
 	if not token:
 		log.critical("DISCORD_TOKEN environment variable is not set")
 		raise RuntimeError("DISCORD_TOKEN environment variable is not set")
-	try:
-		ritter_api.test_api_health()
-	except Exception:
-		log.critical("ritter API health check failed (%s)", ritter_api.API_URL, exc_info=True)
-		raise
+	# API may still be starting (e.g. after host reboot) - wait instead of crash-looping
+	delay = 2
+	while True:
+		try:
+			ritter_api.test_api_health()
+			break
+		except Exception as e:
+			log.warning("ritter API health check failed (%s): %s - retrying in %ss", ritter_api.API_URL, e, delay)
+			time.sleep(delay)
+			delay = min(delay * 2, 60)
 	# log_handler=None: discord.py logs through the root logger configured above
 	bot.run(token, log_handler=None)

@@ -19,6 +19,7 @@ export default function Layout({ children }: { children: ReactNode }) {
             <Link to="/" className="flex items-center gap-1.5 font-semibold text-gray-800">
               <img src="/favicon.ico" alt="" className="w-5 h-5" />
               Ritter
+              <span className="text-xs font-normal text-gray-400">v{__APP_VERSION__}</span>
             </Link>
 {user?.is_admin && (
               <Link to="/admin" className="text-sm text-gray-500 hover:text-gray-800">Admin</Link>
