@@ -12,7 +12,7 @@ import json
 import asyncio
 import time
 
-__version__ = "0.1.0"
+__version__ = "0.1.1"
 
 dotenv_path = Path(__file__).parent / ".env"
 if dotenv_path.exists():
