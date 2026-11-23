@@ -51,3 +51,92 @@ def test_merge_does_not_mutate_response():
     response = [dict(i) for i in DM_ITEMS[:2]]
     VeryfiProvider.merge_base_price_lines(response)
     assert response[0]["description"] == "Rexona"
+
+
+def wolt_item(order, description, total, type_="food"):
+    return {"order": order, "description": description, "quantity": 1.0, "price": total, "total": total, "type": type_}
+
+
+# Line items Veryfi returned for a real Wolt invoice ("wolt rechnung.pdf")
+WOLT_ITEMS = [
+    wolt_item(0, "Burrito Tomato Spiced Pulled Chicken", 0.0),
+    wolt_item(1, "Burrito Tomato Spiced Pulled Chicken", 12.8),
+    wolt_item(2, "Deine 1. Salsa: Sour Cream", 0.0),
+    wolt_item(3, "Deine 2. Salsa: Guacamole", 0.0),
+    wolt_item(4, "Burrito Pulled Lemon Chicken", 0.0),
+    wolt_item(5, "Burrito Pulled Lemon Chicken", 12.8),
+    wolt_item(6, "Deine 1. Salsa: Sour Cream", 0.0),
+    wolt_item(7, "Deine 2. Salsa: Guacamole", 0.0),
+    wolt_item(8, "Delivery", 3.99, "delivery"),
+    wolt_item(9, "Service fee", 1.79, "fee"),
+]
+
+WOLT_VENDOR = {"name": "Wolt", "web": "wolt.com", "raw_name": "Wolt Enterprises Deutschland GmbH"}
+
+
+def veryfi_response(line_items, vendor, **extra):
+    return {
+        "line_items": [dict(i) for i in line_items],
+        "vendor": dict(vendor),
+        "payment": {"payment_type": None},
+        "meta": {"ocr_score": 0.9},
+        "date": "2026-11-22 19:50:00",
+        "total": round(sum(i["total"] for i in line_items), 2),
+        "ocr_text": "...",
+        **extra,
+    }
+
+
+class FakeVeryfiClient:
+    def __init__(self, response):
+        self.response = response
+
+    def process_document(self, file_path, delete_after_processing=True):
+        return self.response
+
+
+def process(response):
+    return VeryfiProvider(FakeVeryfiClient(response)).process_document("x.pdf")
+
+
+def test_wolt_drops_zero_items():
+    receipt = process(veryfi_response(WOLT_ITEMS, WOLT_VENDOR, ship_to={"name": "Pablos - Tacos & Burritos"}))
+    assert [(i.description, i.total) for i in receipt.line_items] == [
+        ("Burrito Tomato Spiced Pulled Chicken", 12.8),
+        ("Burrito Pulled Lemon Chicken", 12.8),
+        ("Delivery", 3.99),
+        ("Service fee", 1.79),
+    ]
+    assert sum(i.total for i in receipt.line_items) == pytest.approx(31.38)
+    assert receipt.total == pytest.approx(31.38)
+
+
+def test_wolt_vendor_name_includes_restaurant():
+    receipt = process(veryfi_response(WOLT_ITEMS, WOLT_VENDOR, ship_to={"name": " Pablos - Tacos & Burritos "}))
+    assert receipt.vendor.name == "Wolt - Pablos - Tacos & Burritos"
+
+
+@pytest.mark.parametrize("ship_to", [None, {}, {"name": None}, {"name": "  "}])
+def test_wolt_vendor_name_without_restaurant(ship_to):
+    receipt = process(veryfi_response(WOLT_ITEMS, WOLT_VENDOR, ship_to=ship_to))
+    assert receipt.vendor.name == "Wolt"
+
+
+def test_wolt_detected_by_website():
+    vendor = {"name": "Wolt Enterprises Deutschland GmbH", "web": "https://wolt.com"}
+    receipt = process(veryfi_response(WOLT_ITEMS, vendor, ship_to={"name": "Pablos"}))
+    assert receipt.vendor.name == "Wolt - Pablos"
+    assert len(receipt.line_items) == 4
+
+
+def test_zero_items_kept_for_other_vendors():
+    receipt = process(veryfi_response(WOLT_ITEMS[:4], {"name": "Pablos"}, ship_to={"name": "Someone"}))
+    assert receipt.vendor.name == "Pablos"
+    assert len(receipt.line_items) == 4
+
+
+def test_wolt_keeps_discounts():
+    items = WOLT_ITEMS + [wolt_item(10, "Wolt+ Rabatt", -2.0, "discount")]
+    receipt = process(veryfi_response(items, WOLT_VENDOR))
+    assert receipt.line_items[-1].total == -2.0
+    assert len(receipt.line_items) == 5

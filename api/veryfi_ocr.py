@@ -27,11 +27,14 @@ class VeryfiProvider(OCRProvider):
         if not response.get("line_items", []):
             return Receipt.empty_receipt()
         
-        line_items = self.parse_line_items(response.get("line_items"))
-        response.pop("line_items")
-     
+        line_items_response = response.pop("line_items")
+        is_wolt = self.is_wolt(response)
+        if is_wolt:
+            line_items_response = self.drop_zero_items(line_items_response)
+        line_items = self.parse_line_items(line_items_response)
+
         vendor = Vendor(
-            name=response["vendor"].get("name"),
+            name=self.wolt_vendor_name(response) if is_wolt else response["vendor"].get("name"),
             address=response["vendor"].get("address"),
             category=response["vendor"].get("category"),
             logo=response["vendor"].get("logo"),
@@ -57,6 +60,32 @@ class VeryfiProvider(OCRProvider):
             ocr_score=response['meta'].get("ocr_score"),
             raw_response=response
         )
+
+    @staticmethod
+    def is_wolt(response: dict) -> bool:
+        vendor = response.get("vendor") or {}
+        name = (vendor.get("name") or "").strip().lower()
+        web = (vendor.get("web") or "").strip().lower()
+        return name == "wolt" or web.endswith("wolt.com")
+
+    @staticmethod
+    def wolt_vendor_name(response: dict) -> str:
+        """
+        Wolt invoices name Wolt as the seller; the restaurant is the "Venue", which
+        Veryfi reports as ship_to.name. Show "Wolt - <restaurant>", plain "Wolt" if missing.
+        """
+        venue = ((response.get("ship_to") or {}).get("name") or "").strip()
+        return f"Wolt - {venue}" if venue else "Wolt"
+
+    @staticmethod
+    def drop_zero_items(line_items_response: list[dict]) -> list[dict]:
+        """
+        Wolt invoices list every dish twice (a 0,00 € group heading, then the priced line)
+        and every free option ("Deine 1. Salsa: Sour Cream") as its own 0,00 € line.
+        None of them carries money, so drop them.
+        """
+        return [item for item in line_items_response
+                if abs(item.get("total") or 0) >= 0.005 or abs(item.get("price") or 0) >= 0.005]
 
     @staticmethod
     def merge_base_price_lines(line_items_response: list[dict]) -> list[dict]:
