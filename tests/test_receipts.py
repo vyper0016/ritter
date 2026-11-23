@@ -151,6 +151,45 @@ async def test_delete_receipt_owner(client, user_token, db, receipt):
     assert await db.get(ReceiptORM, receipt.id) is None
 
 
+async def _api_key(client, token):
+    resp = await client.post("/users/me/api-keys", json={"name": "test"},
+                             headers={"Authorization": f"Bearer {token}"})
+    assert resp.status_code == 201
+    return resp.json()["key"]
+
+
+async def test_list_and_get_receipts_with_api_key(client, user_token, receipt):
+    key = await _api_key(client, user_token)
+    resp = await client.get("/receipts", headers={"X-API-Key": key})
+    assert resp.status_code == 200
+    data = [r for r in resp.json() if r["id"] == receipt.id]
+    assert data and data[0]["created_at"]
+    resp = await client.get(f"/receipts/{receipt.id}", headers={"X-API-Key": key})
+    assert resp.status_code == 200
+
+
+async def test_delete_receipt_with_api_key(client, user_token, db, receipt):
+    key = await _api_key(client, user_token)
+    resp = await client.delete(f"/receipts/{receipt.id}", headers={"X-API-Key": key})
+    assert resp.status_code == 204
+
+    from api.models import ReceiptORM
+    assert await db.get(ReceiptORM, receipt.id) is None
+
+
+async def test_delete_receipt_with_other_users_api_key_forbidden(client, admin_token, receipt):
+    key = await _api_key(client, admin_token)
+    resp = await client.delete(f"/receipts/{receipt.id}", headers={"X-API-Key": key})
+    assert resp.status_code == 403
+
+
+async def test_receipts_reject_invalid_api_key(client, receipt):
+    resp = await client.get("/receipts", headers={"X-API-Key": "rk_wrong"})
+    assert resp.status_code == 401
+    resp = await client.delete(f"/receipts/{receipt.id}", headers={"X-API-Key": "rk_wrong"})
+    assert resp.status_code == 401
+
+
 async def test_delete_receipt_non_owner_forbidden(client, admin_token, receipt):
     resp = await client.delete(
         f"/receipts/{receipt.id}",

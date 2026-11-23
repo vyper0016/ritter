@@ -219,7 +219,7 @@ async def list_receipts(
     settled: bool | None = None,
     role: str = "all",
     db: AsyncSession = Depends(get_db),
-    current_user=Depends(get_current_user),
+    current_user=Depends(get_user_via_api_key_or_token),
 ):
     uid = current_user.id
     conditions = []
@@ -244,7 +244,7 @@ async def list_receipts(
 async def get_receipt(
     receipt_id: int,
     db: AsyncSession = Depends(get_db),
-    _=Depends(get_current_user),
+    _=Depends(get_user_via_api_key_or_token),
 ):
     result = await db.execute(
         select(ReceiptORM)
@@ -273,7 +273,7 @@ async def get_receipt_image(
 async def delete_receipt(
     receipt_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user=Depends(get_current_user),
+    current_user=Depends(get_user_via_api_key_or_token),
 ):
     receipt = await require_receipt_owner(receipt_id, db, current_user)
     if receipt.image_path and os.path.exists(receipt.image_path):
