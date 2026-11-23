@@ -6,6 +6,7 @@ from api.vendor import Vendor
 from api.line_item import LineItem
 from api.payment import Payment
 from api.ocr import OCRProvider
+from api.wolt_pdf import pruned_wolt_pdf
 
 # German base price line, e.g. "79,00 € je 1 l." / "0,10 € je 1 St."
 BASE_PRICE_LINE = re.compile(r"\d+,\d{2}\s*\S?\s*je\s+1\s+\w+\.?\s*$")
@@ -23,12 +24,14 @@ class VeryfiProvider(OCRProvider):
         self.client.get_documents()
 
     def process_document(self, file_path: str) -> Receipt:
-        response = self.client.process_document(file_path, delete_after_processing=True)
+        # Wolt invoices carry ~10 pages of terms after the order; only send the order pages
+        with pruned_wolt_pdf(file_path) as (upload_path, is_wolt_pdf):
+            response = self.client.process_document(upload_path, delete_after_processing=True)
         if not response.get("line_items", []):
             return Receipt.empty_receipt()
         
         line_items_response = response.pop("line_items")
-        is_wolt = self.is_wolt(response)
+        is_wolt = is_wolt_pdf or self.is_wolt(response)
         if is_wolt:
             line_items_response = self.drop_zero_items(line_items_response)
         line_items = self.parse_line_items(line_items_response)
