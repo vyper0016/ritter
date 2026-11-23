@@ -40,6 +40,7 @@ Set via env vars (see `.env.example` and `docker-compose.yml`):
 | `AUTH_COOKIE_TTL_HOURS` | Login session lifetime in hours (default 24) |
 | `OCR_PROVIDER` | `veryfi` |
 | `VERYFI_*` | Veryfi API creds |
+| `VERYFI_API_KEY_BACKUP` | Optional backup key, used when the first key is rejected or out of usage. `VERYFI_CLIENT_ID_BACKUP` / `VERYFI_CLIENT_SECRET_BACKUP` / `VERYFI_USERNAME_BACKUP` default to the primary values |
 | `RECEIPT_IMAGE_PATH` / `PROFILE_PICTURE_PATH` | Image storage paths |
 
 ## Local dev

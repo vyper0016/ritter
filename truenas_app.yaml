@@ -36,6 +36,7 @@ services:
       VERYFI_CLIENT_SECRET=
       VERYFI_USERNAME=
       VERYFI_API_KEY=
+      VERYFI_API_KEY_BACKUP=
     volumes:
       - images:/app/images
 

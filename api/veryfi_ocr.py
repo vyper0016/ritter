@@ -1,5 +1,7 @@
+import logging
 import re
 from veryfi import Client
+from veryfi.errors import VeryfiClientError
 from api.misc import get_config
 from api.receipt import Receipt
 from api.vendor import Vendor
@@ -8,17 +10,59 @@ from api.payment import Payment
 from api.ocr import OCRProvider
 from api.wolt_pdf import pruned_wolt_pdf
 
+log = logging.getLogger(__name__)
+
 # German base price line, e.g. "79,00 € je 1 l." / "0,10 € je 1 St."
 BASE_PRICE_LINE = re.compile(r"\d+,\d{2}\s*\S?\s*je\s+1\s+\w+\.?\s*$")
+
+# Statuses that mean "this key can't be used right now" (bad key, unpaid, forbidden,
+# usage limit reached, rate limited). Other errors (e.g. a bad document) would fail
+# on the backup key too, so they are raised straight away.
+KEY_FAILURE_STATUSES = {401, 402, 403, 409, 429}
+
+
+class FailoverClient:
+    """Tries each Veryfi client in order; moves on when a key is rejected or out of usage."""
+    def __init__(self, clients: list):
+        self.clients = clients
+
+    def _call(self, method: str, *args, **kwargs):
+        for i, client in enumerate(self.clients):
+            try:
+                return getattr(client, method)(*args, **kwargs)
+            except VeryfiClientError as exc:
+                is_last = i == len(self.clients) - 1
+                if is_last or getattr(exc, "status", None) not in KEY_FAILURE_STATUSES:
+                    raise
+                log.warning("Veryfi key #%d failed (%s), trying backup key", i + 1, exc)
+
+    def process_document(self, file_path, delete_after_processing=True):
+        return self._call("process_document", file_path, delete_after_processing=delete_after_processing)
+
+    def get_documents(self, *args, **kwargs):
+        return self._call("get_documents", *args, **kwargs)
+
+
+def client_from_config():
+    """Primary Veryfi client, plus a backup when VERYFI_API_KEY_BACKUP is set.
+    The backup reuses the primary client id / secret / username unless the
+    matching *_BACKUP variable is set (needed when the backup key is from another account)."""
+    keys = ("VERYFI_CLIENT_ID", "VERYFI_CLIENT_SECRET", "VERYFI_USERNAME", "VERYFI_API_KEY")
+    primary = [get_config(k) for k in keys]
+    clients = [Client(*primary)]
+    if get_config("VERYFI_API_KEY_BACKUP"):
+        backup = [get_config(f"{k}_BACKUP") or value for k, value in zip(keys, primary)]
+        clients.append(Client(*backup))
+    return FailoverClient(clients)
+
 
 class VeryfiProvider(OCRProvider):
     def __init__(self, client):
         self.client = client
-        
+
     @classmethod
     def from_config(cls):
-        client = Client(get_config("VERYFI_CLIENT_ID"), get_config("VERYFI_CLIENT_SECRET"), get_config("VERYFI_USERNAME"), get_config("VERYFI_API_KEY"))
-        return cls(client)
+        return cls(client_from_config())
     
     def test_connection(self) -> None:
         self.client.get_documents()

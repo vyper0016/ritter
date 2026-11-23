@@ -7,9 +7,7 @@ ROOT_DIR = Path(__file__).resolve().parent.parent
 SAMPLES_DIR = ROOT_DIR / "samples"
 sys.path.insert(0, str(ROOT_DIR))
 
-from veryfi import Client
-from api.misc import get_config
-from api.veryfi_ocr import VeryfiProvider
+from api.veryfi_ocr import VeryfiProvider, client_from_config
 
 RECEIPTS_DIR = SAMPLES_DIR / "receipts"
 RESPONSES_DIR = SAMPLES_DIR / "responses"
@@ -28,7 +26,7 @@ class CachedClient():
                 return json.load(f)
 
         if self.client is None:
-            self.client = Client(get_config("VERYFI_CLIENT_ID"), get_config("VERYFI_CLIENT_SECRET"), get_config("VERYFI_USERNAME"), get_config("VERYFI_API_KEY"))
+            self.client = client_from_config()
         print(f"  fetching {Path(file_path).name} from Veryfi...")
         response = self.client.process_document(file_path, delete_after_processing=delete_after_processing)
         with open(response_path, "w", encoding="utf-8") as f:
