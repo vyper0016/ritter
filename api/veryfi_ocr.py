@@ -15,9 +15,28 @@ log = logging.getLogger(__name__)
 # German base price line, e.g. "79,00 € je 1 l." / "0,10 € je 1 St."
 BASE_PRICE_LINE = re.compile(r"\d+,\d{2}\s*\S?\s*je\s+1\s+\w+\.?\s*$")
 
+# Wolt order table row: description, VAT %, quantity, gross unit price, price (tab-separated)
+AMOUNT = r"-?\d+(?:[.,]\d{2})"
+WOLT_ITEM_LINE = re.compile(
+    rf"^(?P<description>[^\t]+?)\t+\d+(?:[.,]\d+)?\s*%\t+(?P<quantity>\d+(?:[.,]\d+)?)\t+"
+    rf"(?P<price>{AMOUNT})\s*\S?\t+(?P<total>{AMOUNT})\s*\S?$"
+)
+WOLT_VENUE_LINE = re.compile(r"^(?:Venue|Restaurant|Lokal)\t+(.+)$", re.MULTILINE)
+
+
+def clean_ocr_text(text: str | None) -> str:
+    # Wolt PDFs put left-to-right marks in front of amounts
+    return (text or "").replace("‎", "").replace("‏", "")
+
+
+def parse_amount(value: str) -> float:
+    return float(value.replace(",", "."))
+
+
 # Statuses that mean "this key can't be used right now" (bad key, unpaid, forbidden,
-# usage limit reached, rate limited). Other errors (e.g. a bad document) would fail
-# on the backup key too, so they are raised straight away.
+# usage limit reached, rate limited). Veryfi answers an exhausted scan limit with
+# 403 "You have reached your scan limit ...". Other errors (e.g. a bad document)
+# would fail on the backup key too, so they are raised straight away.
 KEY_FAILURE_STATUSES = {401, 402, 403, 409, 429}
 
 
@@ -77,7 +96,7 @@ class VeryfiProvider(OCRProvider):
         line_items_response = response.pop("line_items")
         is_wolt = is_wolt_pdf or self.is_wolt(response)
         if is_wolt:
-            line_items_response = self.drop_zero_items(line_items_response)
+            line_items_response = self.wolt_line_items(response, line_items_response)
         line_items = self.parse_line_items(line_items_response)
 
         vendor = Vendor(
@@ -118,11 +137,68 @@ class VeryfiProvider(OCRProvider):
     @staticmethod
     def wolt_vendor_name(response: dict) -> str:
         """
-        Wolt invoices name Wolt as the seller; the restaurant is the "Venue", which
-        Veryfi reports as ship_to.name. Show "Wolt - <restaurant>", plain "Wolt" if missing.
+        Wolt invoices name Wolt as the seller; the restaurant is the "Venue". Veryfi puts it
+        in ship_to.name or vendor.name depending on the account, so read the "Venue" line of
+        the OCR text first. Show "Wolt - <restaurant>", plain "Wolt" if missing.
         """
-        venue = ((response.get("ship_to") or {}).get("name") or "").strip()
-        return f"Wolt - {venue}" if venue else "Wolt"
+        match = WOLT_VENUE_LINE.search(clean_ocr_text(response.get("ocr_text")))
+        candidates = [
+            match.group(1) if match else "",
+            (response.get("ship_to") or {}).get("name"),
+            (response.get("vendor") or {}).get("name"),
+        ]
+        for name in candidates:
+            name = (name or "").strip()
+            if name and "wolt" not in name.lower():
+                return f"Wolt - {name}"
+        return "Wolt"
+
+    @staticmethod
+    def wolt_line_items(response: dict, line_items_response: list[dict]) -> list[dict]:
+        """
+        Veryfi's grouping of Wolt rows differs between accounts (one account shifted a dish
+        price onto the free option below it), but its OCR text is the same and keeps the
+        table columns tab-separated. Read the items from the OCR text; use Veryfi's items only
+        when that fails or does not add up to the invoice total.
+        """
+        items = VeryfiProvider.parse_wolt_ocr_items(response.get("ocr_text"))
+        total = response.get("total")
+        if items and total is not None and abs(sum(i["total"] for i in items) - total) < 0.005:
+            return items
+        log.warning("Wolt invoice: could not read items from OCR text — using Veryfi line items")
+        return VeryfiProvider.drop_zero_items(line_items_response)
+
+    @staticmethod
+    def parse_wolt_ocr_items(ocr_text: str | None) -> list[dict]:
+        """
+        Priced rows of the Wolt order table, e.g. "Delivery\t\t7%\t1\t\t3.99\t3.99".
+        Group headings ("Burrito ...\t\t12.80") have no VAT column and are skipped,
+        as are 0.00 rows (free options).
+        """
+        items = []
+        for line in clean_ocr_text(ocr_text).splitlines():
+            match = WOLT_ITEM_LINE.match(line.strip())
+            if not match:
+                continue
+            quantity = parse_amount(match["quantity"])
+            price = parse_amount(match["price"])
+            total = parse_amount(match["total"])
+            if abs(total) < 0.005:
+                continue
+            description = match["description"].strip()
+            lower = description.lower()
+            item_type = ("discount" if total < 0 else "delivery" if "delivery" in lower or "liefer" in lower
+                         else "fee" if "fee" in lower or "gebühr" in lower else "food")
+            items.append({
+                "order": len(items),
+                "description": description,
+                "quantity": quantity,
+                "price": price if abs(quantity * price - total) < 0.01 else total / quantity,
+                "total": total,
+                "type": item_type,
+                "text": line.strip(),
+            })
+        return items
 
     @staticmethod
     def drop_zero_items(line_items_response: list[dict]) -> list[dict]:

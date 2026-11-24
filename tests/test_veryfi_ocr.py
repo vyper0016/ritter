@@ -1,4 +1,7 @@
+from contextlib import contextmanager
+
 import pytest
+import api.veryfi_ocr as veryfi_ocr
 from api.veryfi_ocr import VeryfiProvider
 
 
@@ -140,3 +143,96 @@ def test_wolt_keeps_discounts():
     receipt = process(veryfi_response(items, WOLT_VENDOR))
     assert receipt.line_items[-1].total == -2.0
     assert len(receipt.line_items) == 5
+
+
+# OCR text of the order table of "wolt rechnung.pdf" (same for every Veryfi account)
+WOLT_OCR_TEXT = (
+    "Acceptance of order / Invoice #298949674\n\nOrder details\n\n"
+    "Customer\t\t\t\t\t\t\t\t\tMax Mustermann\n\n"
+    "Venue\t\t\t\t\t\t\t\tPablos - Tacos & Burritos\n"
+    "Order type\t\t\t\t\t\t\t\t\tDelivery\n\n"
+    "Payment method\nPayPal\t\t\t\t\t\t\t\t\t\t‎31.38\n\n"
+    "Item\t\t\t\t\tVAT % Quantity\tGross unit price\tPrice\n"
+    "Burrito Tomato Spiced Pulled Chicken\t\t\t\t\t\t‎12.80\n"
+    "Burrito Tomato Spiced Pulled Chicken\t7%\t1\t‎12.80\t‎12.80\n"
+    "Deine 1. Salsa: Sour Cream\t\t7%\t1\t\t‎0.00\t‎0.00\n"
+    "Deine 2. Salsa: Guacamole\t\t7%\t1\t\t‎0.00\t‎0.00\n"
+    "Burrito Pulled Lemon Chicken\t\t\t\t\t\t\t‎12.80\n"
+    "Burrito Pulled Lemon Chicken\t\t7%\t1\t‎12.80\t‎12.80\n"
+    "Deine 1. Salsa: Sour Cream\t\t7%\t1\t\t‎0.00\t‎0.00\n"
+    "Deine 2. Salsa: Guacamole\t\t7%\t1\t\t‎0.00\t‎0.00\n"
+    "Delivery\t\t\t\t\t7%\t1\t\t‎3.99\t‎3.99\n"
+    "Service fee\t\t\t\t\t7%\t1\t\t‎1.79\t‎1.79\n"
+    "Total in EUR (incl. VAT)\t\t\t\t\t\t\t\t‎31.38\n\n"
+    "\tNet price\tVAT\t\tTotal\nVAT 7%\t\t\t\t\t29.33\t2.05\t31.38\n"
+)
+
+# What a second Veryfi account returned for the same PDF: the second burrito's price
+# shifted onto "Guacamole", restaurant in vendor.name instead of ship_to.name.
+WOLT_ITEMS_MISALIGNED = [
+    wolt_item(0, "Burrito Tomato Spiced Pulled Chicken", 12.8),
+    wolt_item(1, "Deine 1. Salsa: Sour Cream", 0.0),
+    wolt_item(2, "Deine 2. Salsa: Guacamole", 12.8),
+    wolt_item(3, "Burrito Pulled Lemon Chicken", 12.8),
+    wolt_item(4, "Deine 1. Salsa: Sour Cream", 0.0),
+    wolt_item(5, "Delivery", 3.99, "delivery"),
+    wolt_item(6, "Service fee", 1.79, "fee"),
+]
+
+WOLT_EXPECTED = [
+    ("Burrito Tomato Spiced Pulled Chicken", 12.8, "food"),
+    ("Burrito Pulled Lemon Chicken", 12.8, "food"),
+    ("Delivery", 3.99, "delivery"),
+    ("Service fee", 1.79, "fee"),
+]
+
+
+def wolt_ocr_response(line_items, vendor, **extra):
+    response = veryfi_response(line_items, vendor, **extra)
+    response["ocr_text"] = WOLT_OCR_TEXT
+    response["total"] = 31.38
+    return response
+
+
+@pytest.mark.parametrize("line_items,vendor,ship_to", [
+    (WOLT_ITEMS, WOLT_VENDOR, {"name": "Pablos - Tacos & Burritos"}),
+    (WOLT_ITEMS_MISALIGNED, {"name": "Pablos - Tacos & Burritos"}, {"name": None}),
+])
+def test_wolt_items_read_from_ocr_text(line_items, vendor, ship_to, monkeypatch):
+    # Page 1 OCR has no Wolt marker; in production the PDF check flags the invoice as Wolt
+    @contextmanager
+    def wolt_pdf(path):
+        yield path, True
+    monkeypatch.setattr(veryfi_ocr, "pruned_wolt_pdf", wolt_pdf)
+    response = wolt_ocr_response(line_items, vendor, ship_to=ship_to)
+    receipt = VeryfiProvider(FakeVeryfiClient(response)).process_document("x.pdf")
+    assert [(i.description, i.total, i.type) for i in receipt.line_items] == WOLT_EXPECTED
+    assert [i.order for i in receipt.line_items] == [0, 1, 2, 3]
+    assert receipt.vendor.name == "Wolt - Pablos - Tacos & Burritos"
+
+
+def test_wolt_falls_back_to_veryfi_items_when_ocr_sum_is_off():
+    response = wolt_ocr_response(WOLT_ITEMS, WOLT_VENDOR)
+    response["total"] = 40.0
+    receipt = process(response)
+    assert len(receipt.line_items) == 4
+    assert receipt.line_items[0].raw_response.get("text") is None  # Veryfi's items, not OCR rows
+
+
+def test_parse_wolt_ocr_items_german_amounts():
+    text = "Lieferung\t\t19 %\t2\t\t1,50 €\t3,00 €\nRabatt\t\t7%\t1\t\t-2,00\t-2,00\n"
+    items = VeryfiProvider.parse_wolt_ocr_items(text)
+    assert [(i["description"], i["quantity"], i["price"], i["total"], i["type"]) for i in items] == [
+        ("Lieferung", 2.0, 1.5, 3.0, "delivery"),
+        ("Rabatt", 1.0, -2.0, -2.0, "discount"),
+    ]
+
+
+@pytest.mark.parametrize("vendor_name,ship_to_name,expected", [
+    ("Wolt Enterprises Deutschland GmbH", None, "Wolt"),
+    ("Pablos", None, "Wolt - Pablos"),
+    ("Wolt", "Pablos", "Wolt - Pablos"),
+])
+def test_wolt_vendor_name_fallbacks(vendor_name, ship_to_name, expected):
+    response = {"ocr_text": "...", "vendor": {"name": vendor_name}, "ship_to": {"name": ship_to_name}}
+    assert VeryfiProvider.wolt_vendor_name(response) == expected
